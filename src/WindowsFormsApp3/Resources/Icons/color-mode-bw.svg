@@ -1,0 +1,32 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- 黑白主题图标 - 半黑半白圆圈 -->
+  <defs>
+    <!-- 渐变定义 -->
+    <linearGradient id="bwGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#000000" />
+      <stop offset="50%" style="stop-color:#000000" />
+      <stop offset="50%" style="stop-color:#ffffff" />
+      <stop offset="100%" style="stop-color:#ffffff" />
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆 -->
+  <circle cx="8" cy="8" r="7" fill="white" stroke="#333333" stroke-width="1"/>
+
+  <!-- 半黑半白圆圈 -->
+  <path d="M 8 1 A 7 7 0 0 1 8 15 A 7 7 0 0 1 8 1 Z" fill="black"/>
+  <path d="M 8 1 A 7 7 0 0 0 8 15 A 7 7 0 0 0 8 1 Z" fill="white"/>
+
+  <!-- 中心分割线 -->
+  <line x1="8" y1="1" x2="8" y2="15" stroke="#666666" stroke-width="0.5"/>
+
+  <!-- 左侧小圆点（黑色侧） -->
+  <circle cx="5" cy="8" r="1" fill="white"/>
+
+  <!-- 右侧小圆点（白色侧） -->
+  <circle cx="11" cy="8" r="1" fill="black"/>
+
+  <!-- 对比度符号 -->
+  <circle cx="8" cy="3" r="0.8" fill="white" stroke="black" stroke-width="0.5"/>
+  <circle cx="8" cy="13" r="0.8" fill="black" stroke="white" stroke-width="0.5"/>
+</svg>
