@@ -95,7 +95,6 @@ namespace WindowsFormsApp3.Controls
         // 拖拽状态跟踪
         private TreeNode _draggedNode;
         private TreeNode _originalParentNode; // 记录原始父分组
-        private bool _dragRejected = false;
 
         public EventGroupsTreeView()
         {
@@ -1119,7 +1118,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                     // 只允许拖拽项目节点
                     _draggedNode = node;
                     _originalParentNode = node.Parent; // 记录原始父分组
-                    _dragRejected = false;
 
                     System.Diagnostics.Debug.WriteLine($"[ItemDrag] 调用 DoDragDrop 开始拖拽操作...");
                     treeView.DoDragDrop(node, DragDropEffects.Move);
@@ -1132,7 +1130,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                     // 允许拖拽分组节点进行排序
                     _draggedNode = node;
                     _originalParentNode = node.Parent; // 记录原始位置
-                    _dragRejected = false;
 
                     System.Diagnostics.Debug.WriteLine($"[ItemDrag] 调用 DoDragDrop 开始分组排序拖拽操作...");
                     treeView.DoDragDrop(node, DragDropEffects.Move);
@@ -1180,7 +1177,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                     if (targetNode?.Tag is TreeNodeData targetData && targetData.NodeType == TreeNodeType.Group)
                     {
                         e.Effect = DragDropEffects.Move;
-                        _dragRejected = false;
                         System.Diagnostics.Debug.WriteLine($"[DragEnter] 分组排序有效：将 '{draggedData.Group.Value}' 排序到 '{targetData.Group.Value}' 附近");
                         return;
                     }
@@ -1189,7 +1185,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                     if (targetNode == null)
                     {
                         e.Effect = DragDropEffects.Move;
-                        _dragRejected = false;
                         System.Diagnostics.Debug.WriteLine($"[DragEnter] 分组排序有效：拖拽到空白区域");
                         return;
                     }
@@ -1223,7 +1218,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                         {
                             // 允许拖拽继续，但标记为冲突状态
                             e.Effect = DragDropEffects.Move;
-                            _dragRejected = true;
                             System.Diagnostics.Debug.WriteLine($"[DragEnter] 检测到保留分组 '{itemTargetData.Group.Value}' 已有项目 '{existingItemName}'，标记为冲突状态");
                             return;
                         }
@@ -1231,12 +1225,10 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                 }
 
                 e.Effect = DragDropEffects.Move;
-                _dragRejected = false;
             }
             else
             {
                 e.Effect = DragDropEffects.None;
-                _dragRejected = false;
             }
         }
 
@@ -1275,7 +1267,6 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                         System.Diagnostics.Debug.WriteLine($"[分组排序] 排序失败或被取消");
                     }
 
-                    _dragRejected = false;
                     return;
                 }
 
@@ -1354,9 +1345,7 @@ private void BtnSaveAsPreset_Click(object sender, EventArgs e)
                 }
             }
 
-            // 重置拖拽拒绝标记
-            _dragRejected = false;
-        }
+          }
 
         /// <summary>
         /// 将项目移动到未分组

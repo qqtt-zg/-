@@ -189,9 +189,47 @@ namespace WindowsFormsApp3
                     LogHelper.Error("自动更新检查初始化失败: " + ex.Message);
                 }
 
+                // 创建测试PDF文件用于CefSharp预览测试
+                try
+                {
+                    string testPdfPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Test", "TestPdf.pdf");
+                    Directory.CreateDirectory(Path.GetDirectoryName(testPdfPath));
+                    WindowsFormsApp3.Test.PdfTestGenerator.CreateTestPdf(testPdfPath, 5);
+                    Console.WriteLine("测试PDF已创建: " + testPdfPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("创建测试PDF失败: " + ex.Message);
+                }
+
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
+
+                // 初始化CefSharp（在应用程序启动时初始化一次）
+                try
+                {
+                    CefSharpInitializer.Initialize();
+                    Console.WriteLine("[CefSharp] 应用程序启动时初始化成功");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[CefSharp] 初始化失败: {ex.Message}");
+                    // 不阻止程序运行，但PDF预览功能可能不可用
+                }
+
                 Application.Run(new Form1());
+
+                // 应用程序退出时清理CefSharp资源
+                try
+                {
+                    CefSharpInitializer.Shutdown();
+                    Console.WriteLine("[CefSharp] 应用程序退出时清理完成");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[CefSharp] 清理失败: {ex.Message}");
+                }
+
                 mutex.ReleaseMutex();
             }
             else

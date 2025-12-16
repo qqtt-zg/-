@@ -3,30 +3,22 @@ using System.Drawing;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Spire.Pdf;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Controls
 {
     /// <summary>
-    /// 现代化 PDF 预览控件
-    /// 使用轻量级方案实现预览，支持实时加载和缓存清除
-    /// 后续可集成更完整的 PDF 渲染引擎
+    /// PDF预览控件包装器
+    /// 内部使用CefSharpPdfPreviewControl实现PDF预览功能
+    /// 保持向后兼容的公共API
     /// </summary>
     public class PdfPreviewControl : Panel
     {
         #region 私有字段
 
-        private int _currentPageIndex = 0;
-        private float _currentZoom = 100f;
-        private string _currentFilePath;
+        private CefSharpPdfPreviewControl _cefControl;
         private bool _isLoading = false;
-        private PictureBox _pictureBox;
-        private int _totalPages = 0;
-        
-        // ✅ 缓存原始 PDF 页面的真实尺寸（未经任何缩放），用于精确的缩放计算
-        private int _originalPageWidth = 0;
-        private int _originalPageHeight = 0;
+        private readonly bool _isDesignMode;
 
         #endregion
 
@@ -37,13 +29,12 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public int CurrentPageIndex
         {
-            get => _currentPageIndex;
+            get => _cefControl?.CurrentPage - 1 ?? 0;
             set
             {
-                if (value >= 0 && value < _totalPages)
+                if (_cefControl != null && value >= 0)
                 {
-                    _currentPageIndex = value;
-                    RefreshCurrentPage();
+                    _ = _cefControl.GoToPage(value + 1);
                 }
             }
         }
@@ -51,29 +42,18 @@ namespace WindowsFormsApp3.Controls
         /// <summary>
         /// PDF 文档总页数
         /// </summary>
-        public int PageCount => _totalPages;
+        public int PageCount => _cefControl?.TotalPages ?? 0;
 
         /// <summary>
-        /// 当前缩放百分比
+        /// 当前缩放百分比（CefSharp自动管理，此处仅用于兼容）
         /// </summary>
         public float CurrentZoom
         {
-            get => _currentZoom;
+            get => 100f; // CefSharp内部管理缩放
             set
             {
-                // ✅ 修复：确保值总是有效并且在有效范围内
-                float validZoom = Math.Max(10, Math.Min(400, value));
-                
-                if (Math.Abs(_currentZoom - validZoom) > 0.01f) // 允许一个小的容差
-                {
-                    _currentZoom = validZoom;
-                    LogHelper.Debug($"[PdfPreviewControl] 缩放字段已更新: {_currentZoom:F0}%");
-                    RefreshCurrentPage();
-                }
-                else
-                {
-                    LogHelper.Debug($"[PdfPreviewControl] 缩放月所改变（当前: {_currentZoom:F0}%, 新值: {validZoom:F0}%）");
-                }
+                // CefSharp通过JavaScript控制缩放，此处保留接口兼容性
+                // 可以通过JavaScript注入实现，但通常使用原生缩放功能
             }
         }
 
@@ -98,32 +78,117 @@ namespace WindowsFormsApp3.Controls
 
         #endregion
 
+        #region 构造函数
+
         public PdfPreviewControl()
         {
+            _isDesignMode = DesignMode;
             InitializeUI();
         }
+
+        #endregion
 
         #region UI 初始化
 
         private void InitializeUI()
         {
-            this.BackColor = Color.FromArgb(248, 248, 248); // 更浅的灰色背景，便于看出PDF内容边界
+            this.BackColor = Color.FromArgb(248, 248, 248);
             this.Dock = DockStyle.Fill;
             this.BorderStyle = BorderStyle.None;
             this.Padding = new Padding(0);
             this.DoubleBuffered = true;
 
-            // 创建 PictureBox 用于昺示预览
-            _pictureBox = new PictureBox
+            // 在设计器模式下，显示占位符而不创建CefSharp控件
+            if (_isDesignMode)
+            {
+                CreateDesignTimePlaceholder();
+                return;
+            }
+
+            try
+            {
+                // 确保CefSharp已初始化
+                if (!CefSharpInitializer.IsInitialized)
+                {
+                    CefSharpInitializer.Initialize();
+                }
+
+                // 创建CefSharp PDF预览控件
+                _cefControl = new CefSharpPdfPreviewControl
+                {
+                    Dock = DockStyle.Fill
+                };
+
+                // 绑定事件
+                _cefControl.PageChanged += CefControl_PageChanged;
+                _cefControl.PageLoaded += CefControl_PageLoaded;
+                _cefControl.LoadError += CefControl_LoadError;
+
+                this.Controls.Add(_cefControl);
+                LogHelper.Debug("[PdfPreviewControl] CefSharp PDF预览控件初始化完成");
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PdfPreviewControl] 初始化失败: {ex.Message}");
+                // 创建一个错误提示标签
+                var errorLabel = new Label
+                {
+                    Text = $"PDF预览组件初始化失败\n{ex.Message}",
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = Color.Red,
+                    BackColor = Color.LightGray
+                };
+                this.Controls.Add(errorLabel);
+            }
+        }
+
+        /// <summary>
+        /// 创建设计时占位符
+        /// </summary>
+        private void CreateDesignTimePlaceholder()
+        {
+            var placeholder = new Panel
             {
                 Dock = DockStyle.Fill,
-                SizeMode = PictureBoxSizeMode.CenterImage,
-                BackColor = Color.FromArgb(248, 248, 248), // 更浅的灰色背景
-                BorderStyle = BorderStyle.None
+                BackColor = Color.FromArgb(245, 245, 245),
+                BorderStyle = BorderStyle.FixedSingle
             };
-            this.Controls.Add(_pictureBox);
 
-            LogHelper.Debug("[PdfPreviewControl] UI 初始化完成");
+            var label = new Label
+            {
+                Text = "PDF预览控件\n(CefSharp - 设计时模式)",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new System.Drawing.Font("Microsoft YaHei", 9f, FontStyle.Regular),
+                AutoSize = false
+            };
+
+            placeholder.Controls.Add(label);
+            this.Controls.Add(placeholder);
+        }
+
+        #endregion
+
+        #region 事件处理
+
+        private void CefControl_PageChanged(object sender, EventArgs e)
+        {
+            // 页面变化时可以触发相关事件
+            // 这里暂时不需要特殊处理
+        }
+
+        private void CefControl_PageLoaded(object sender, EventArgs e)
+        {
+            _isLoading = false;
+            OnPageLoaded(CurrentPageIndex, PageCount);
+        }
+
+        private void CefControl_LoadError(object sender, string error)
+        {
+            _isLoading = false;
+            OnLoadError(new Exception(error));
         }
 
         #endregion
@@ -132,10 +197,15 @@ namespace WindowsFormsApp3.Controls
 
         /// <summary>
         /// 异步加载 PDF 文件
-        /// 实时加载，禁止显示缓存的旧内容
         /// </summary>
         public async Task<bool> LoadPdfAsync(string filePath)
         {
+            // 设计时模式下不加载PDF
+            if (_isDesignMode)
+            {
+                return true;
+            }
+
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
             {
                 LogHelper.Error($"[PdfPreviewControl] PDF 文件不存在: {filePath}");
@@ -145,77 +215,34 @@ namespace WindowsFormsApp3.Controls
             try
             {
                 _isLoading = true;
+                LogHelper.Debug($"[PdfPreviewControl] 开始加载PDF: {filePath}");
 
-                // 在后台线程加载 PDF
-                var loadTask = Task.Run(() =>
+                if (_cefControl != null)
                 {
-                    try
+                    bool success = _cefControl.LoadPdf(filePath);
+                    if (success)
                     {
-                        // 通过 iText7 获取页数
-                        using (var reader = new iText.Kernel.Pdf.PdfReader(filePath))
-                        using (var doc = new iText.Kernel.Pdf.PdfDocument(reader))
-                        {
-                            _totalPages = doc.GetNumberOfPages();
-                        }
-
-                        LogHelper.Debug($"[PdfPreviewControl] PDF 加载成功: {filePath}, 共 {_totalPages} 页");
+                        LogHelper.Debug("[PdfPreviewControl] PDF加载成功");
+                        // PageLoaded事件将在CefSharp控件内部触发
                         return true;
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        LogHelper.Error($"[PdfPreviewControl] PDF 加载异常: {ex.Message}");
+                        LogHelper.Error("[PdfPreviewControl] PDF加载失败");
+                        OnLoadError(new Exception("PDF加载失败"));
                         return false;
                     }
-                });
-
-                bool success = await loadTask;
-
-                if (success)
-                {
-                    _currentFilePath = filePath;
-                    _currentPageIndex = 0;
-                    
-                    // ✅ 优化：并行处理页面加载和缩放计算
-                    // 立即计算缩放参数，不等待渲染完成
-                    float initialZoom = CalculateFitToHeightZoom();
-                    LogHelper.Debug($"[PdfPreviewControl] 预计算适应高度缩放: {initialZoom:F0}%");
-                    
-                    // ✅ 修复：正确等待 PDF 渲染完成后再应用缩放
-                    // 在后台异步执行：加载页面 + 应用缩放
-                    _ = Task.Run(async () =>
-                    {
-                        // 1. 在后台线程中渲染 PDF 页面（阻塞操作）
-                        await RefreshCurrentPageAsync();
-                        
-                        // 2. 回到 UI 线程应用缩放和触发事件
-                        if (InvokeRequired)
-                        {
-                            Invoke(new Action(() =>
-                            {
-                                CurrentZoom = initialZoom;
-                                LogHelper.Debug($"[PdfPreviewControl] ✅ 应用适应高度缩放: {initialZoom:F0}%");
-                                OnPageLoaded(_currentPageIndex, PageCount);
-                            }));
-                        }
-                        else
-                        {
-                            CurrentZoom = initialZoom;
-                            LogHelper.Debug($"[PdfPreviewControl] ✅ 应用适应高度缩放: {initialZoom:F0}%");
-                            OnPageLoaded(_currentPageIndex, PageCount);
-                        }
-                    });
-
-                    return true;
                 }
                 else
                 {
-                    OnLoadError(new Exception("PDF 加载失败"));
+                    LogHelper.Error("[PdfPreviewControl] CefSharp控件未初始化");
+                    OnLoadError(new Exception("PDF预览组件未初始化"));
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.Error($"[PdfPreviewControl] 加载 PDF 异常: {ex.Message}");
+                LogHelper.Error($"[PdfPreviewControl] 加载PDF异常: {ex.Message}");
                 OnLoadError(ex);
                 return false;
             }
@@ -230,9 +257,9 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void GoToPage(int pageIndex)
         {
-            if (pageIndex >= 0 && pageIndex < _totalPages)
+            if (_cefControl != null && pageIndex >= 0)
             {
-                CurrentPageIndex = pageIndex;
+                _ = _cefControl.GoToPage(pageIndex + 1);
             }
         }
 
@@ -241,10 +268,7 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void NextPage()
         {
-            if (_currentPageIndex < _totalPages - 1)
-            {
-                CurrentPageIndex++;
-            }
+            _cefControl?.NextPage();
         }
 
         /// <summary>
@@ -252,42 +276,53 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void PreviousPage()
         {
-            if (_currentPageIndex > 0)
-            {
-                CurrentPageIndex--;
-            }
+            _cefControl?.PreviousPage();
         }
 
         /// <summary>
-        /// 放大
+        /// 第一页
+        /// </summary>
+        public void FirstPage()
+        {
+            _cefControl?.FirstPage();
+        }
+
+        /// <summary>
+        /// 最后一页
+        /// </summary>
+        public void LastPage()
+        {
+            _cefControl?.LastPage();
+        }
+
+        /// <summary>
+        /// 放大（由CefSharp原生处理，此处仅保持兼容）
         /// </summary>
         public void ZoomIn()
         {
-            CurrentZoom = Math.Min(400, _currentZoom * 1.2f);
+            // CefSharp使用原生缩放功能
+            // 可以通过JavaScript注入实现，但通常不需要
+            LogHelper.Debug("[PdfPreviewControl] 缩放功能由CefSharp原生提供");
         }
 
         /// <summary>
-        /// 缩小
+        /// 缩小（由CefSharp原生处理，此处仅保持兼容）
         /// </summary>
         public void ZoomOut()
         {
-            CurrentZoom = Math.Max(10, _currentZoom / 1.2f);
+            // CefSharp使用原生缩放功能
+            LogHelper.Debug("[PdfPreviewControl] 缩放功能由CefSharp原生提供");
         }
 
         /// <summary>
-        /// 清除缓存（用于禁止显示旧内容）
+        /// 清除缓存
         /// </summary>
         public void ClearCache()
         {
             try
             {
-                _currentFilePath = null;
-                _currentPageIndex = 0;
-                _totalPages = 0;
-                _pictureBox.Image = null;
-                // ✅ 清除缓存的原始页面尺寸
-                _originalPageWidth = 0;
-                _originalPageHeight = 0;
+                // 清理CefSharp缓存
+                CefSharpInitializer.ClearCache();
                 LogHelper.Debug("[PdfPreviewControl] 缓存已清除");
             }
             catch (Exception ex)
@@ -297,270 +332,61 @@ namespace WindowsFormsApp3.Controls
         }
 
         /// <summary>
-        /// 计算适应页面宽度的缩放百分比
-        /// 根据已渲染的图片宽度和控件宽度计算
+        /// 计算适应页面宽度的缩放百分比（保持兼容，但实际由CefSharp处理）
         /// </summary>
         public float CalculateFitToWidthZoom()
         {
-            try
-            {
-                // ✅ 修复：使用原始 PDF 页面的真实尺寸（而不是当前显示的缩放图片尺寸）
-                if (_originalPageWidth <= 0 || this.Width <= 0)
-                {
-                    LogHelper.Debug("[PdfPreviewControl] 无法计算适应宽度缩放（原始页面未加载或控件宽度为0）");
-                    return 100f;
-                }
-
-                // 原始页面宽度和控件可用宽度（减去 Padding，并保留3像素边缘底色）
-                float availableWidth = this.Width - this.Padding.Left - this.Padding.Right - 6; // 左右各保留3像素
-
-                if (availableWidth <= 0)
-                {
-                    return 100f;
-                }
-
-                // 计算缩放百分比
-                float zoomPercent = (availableWidth / _originalPageWidth) * 100f;
-                float finalZoom = Math.Max(10, Math.Min(400, zoomPercent)); // 限制在 10-400% 范围内
-
-                LogHelper.Debug($"[PdfPreviewControl] ✅ 计算适应宽度缩放: 原始宽度={_originalPageWidth}, 可用宽度={availableWidth:F0}, 缩放={finalZoom:F0}%");
-                return finalZoom;
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PdfPreviewControl] 计算适应宽度缩放异常: {ex.Message}");
-                return 100f;
-            }
+            // CefSharp自动处理适应页面
+            return 100f;
         }
 
         /// <summary>
-        /// 计算适应页面高度的缩放百分比
-        /// 根据已渲染的图片高度和控件高度计算
+        /// 计算适应页面高度的缩放百分比（保持兼容，但实际由CefSharp处理）
         /// </summary>
         public float CalculateFitToHeightZoom()
         {
-            try
-            {
-                // ✅ 修复：使用原始 PDF 页面的真实尺寸（而不是当前显示的缩放图片尺寸）
-                if (_originalPageHeight <= 0 || this.Height <= 0)
-                {
-                    LogHelper.Debug("[PdfPreviewControl] 无法计算适应高度缩放（原始页面未加载或控件高度为0）");
-                    return 100f;
-                }
+            // CefSharp自动处理适应页面
+            return 100f;
+        }
 
-                // 原始页面高度和控件可用高度（减去 Padding，并保留3像素边缘底色）
-                float availableHeight = this.Height - this.Padding.Top - this.Padding.Bottom - 6; // 上下各保留3像素
+        /// <summary>
+        /// 计算自动最优适应的缩放百分比（保持兼容，但实际由CefSharp处理）
+        /// </summary>
+        public float CalculateBestFitZoom()
+        {
+            // CefSharp默认使用page-fit模式
+            return 100f;
+        }
 
-                if (availableHeight <= 0)
-                {
-                    return 100f;
-                }
+        /// <summary>
+        /// 应用自动最优适应缩放（保持兼容，但实际由CefSharp处理）
+        /// </summary>
+        public void ApplyBestFit()
+        {
+            // CefSharp已在初始化时设置为page-fit模式
+            LogHelper.Debug("[PdfPreviewControl] CefSharp已设置为适应页面模式");
+        }
 
-                // 计算缩放百分比
-                float zoomPercent = (availableHeight / _originalPageHeight) * 100f;
-                float finalZoom = Math.Max(10, Math.Min(400, zoomPercent)); // 限制在 10-400% 范围内
-
-                LogHelper.Debug($"[PdfPreviewControl] ✅ 计算适应高度缩放: 原始高度={_originalPageHeight}, 可用高度={availableHeight:F0}, 缩放={finalZoom:F0}%");
-                return finalZoom;
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PdfPreviewControl] 计算适应高度缩放异常: {ex.Message}");
-                return 100f;
-            }
+        /// <summary>
+        /// 刷新当前页面
+        /// </summary>
+        public new void Refresh()
+        {
+            _cefControl?.Refresh();
         }
 
         #endregion
 
-        #region 内部方法
+        #region 事件重写
 
         /// <summary>
-        /// 刷新当前页面显示
-        /// 使用 Spire.Pdf 渲染真实 PDF 页面
+        /// 控件大小改变时的事件处理
+        /// CefSharp会自动处理调整大小
         /// </summary>
-        private void RefreshCurrentPage()
+        protected override void OnResize(EventArgs e)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(_currentFilePath) || _totalPages == 0)
-                {
-                    LogHelper.Warn("[PdfPreviewControl] 没有加载的 PDF 文件");
-                    return;
-                }
-
-                // 在后台线程中进行 PDF 渲染，避免阻塞 UI
-                Task.Run(() =>
-                {
-                    try
-                    {
-                        using (PdfDocument document = new PdfDocument(_currentFilePath))
-                        {
-                            if (_currentPageIndex >= 0 && _currentPageIndex < document.Pages.Count)
-                            {
-                                // ✅ 将指定页面渲染为高质量图片
-                                // 使用 DPI 150 平衡质量与性能
-                                Image pageImage = document.SaveAsImage(_currentPageIndex, 150, 150);
-
-                                if (pageImage != null)
-                                {
-                                    Bitmap pageBitmap = pageImage as Bitmap;
-                                    if (pageBitmap == null)
-                                    {
-                                        // 根据需要转换为 Bitmap
-                                        pageBitmap = new Bitmap(pageImage);
-                                        pageImage.Dispose();
-                                    }
-                                    
-                                    // ✅ 缓存原始页面尺寸（仅存一次）
-                                    if (_originalPageWidth == 0 || _originalPageHeight == 0)
-                                    {
-                                        _originalPageWidth = pageBitmap.Width;
-                                        _originalPageHeight = pageBitmap.Height;
-                                        LogHelper.Debug($"[PdfPreviewControl] 缓存原始页面尺寸: 宽={_originalPageWidth}, 高={_originalPageHeight}");
-                                    }
-                                    
-                                    // 应用缩放（在渲染后缩放可能影响质量，这里只做缩放计算）
-                                    int scaledWidth = (int)(pageBitmap.Width * _currentZoom / 100f);
-                                    int scaledHeight = (int)(pageBitmap.Height * _currentZoom / 100f);
-
-                                    // 缩放图片（如果需要）
-                                    if (Math.Abs(_currentZoom - 100f) > 0.1f)
-                                    {
-                                        Bitmap scaledBitmap = new Bitmap(pageBitmap, scaledWidth, scaledHeight);
-                                        pageBitmap.Dispose();
-                                        pageBitmap = scaledBitmap;
-                                    }
-
-                                    // 在 UI 线程更新显示
-                                    if (InvokeRequired)
-                                    {
-                                        Invoke(new Action(() =>
-                                        {
-                                            _pictureBox.Image?.Dispose();
-                                            _pictureBox.Image = pageBitmap;
-                                            LogHelper.Debug($"[PdfPreviewControl] ✅ 第 {_currentPageIndex + 1}/{_totalPages} 页已渲染，缩放: {_currentZoom:F0}%");
-                                        }));
-                                    }
-                                    else
-                                    {
-                                        _pictureBox.Image?.Dispose();
-                                        _pictureBox.Image = pageBitmap;
-                                        LogHelper.Debug($"[PdfPreviewControl] ✅ 第 {_currentPageIndex + 1}/{_totalPages} 页已渲染，缩放: {_currentZoom:F0}%");
-                                    }
-                                }
-                                else
-                                {
-                                    LogHelper.Error($"[PdfPreviewControl] 渲染第 {_currentPageIndex + 1} 页失败");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogHelper.Error($"[PdfPreviewControl] PDF 渲染异常: {ex.Message}");
-                        OnLoadError(ex);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PdfPreviewControl] 刷新页面异常: {ex.Message}");
-                OnLoadError(ex);
-            }
-        }
-
-        /// <summary>
-        /// ✅ 异步刷新当前页面 - 正确等待渲染完成
-        /// </summary>
-        private async Task RefreshCurrentPageAsync()
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(_currentFilePath) || _totalPages == 0)
-                {
-                    LogHelper.Warn("[PdfPreviewControl] 没有加载的 PDF 文件");
-                    return;
-                }
-
-                // ✅ 改为真正的异步渲染，返回 Task 以便上层正确等待
-                await Task.Run(() =>
-                {
-                    try
-                    {
-                        using (PdfDocument document = new PdfDocument(_currentFilePath))
-                        {
-                            if (_currentPageIndex >= 0 && _currentPageIndex < document.Pages.Count)
-                            {
-                                // ✅ 将指定页面渲染为高质量图片
-                                // 使用 DPI 150 平衡质量与性能
-                                Image pageImage = document.SaveAsImage(_currentPageIndex, 150, 150);
-
-                                if (pageImage != null)
-                                {
-                                    Bitmap pageBitmap = pageImage as Bitmap;
-                                    if (pageBitmap == null)
-                                    {
-                                        // 根据需要转换为 Bitmap
-                                        pageBitmap = new Bitmap(pageImage);
-                                        pageImage.Dispose();
-                                    }
-                                    
-                                    // ✅ 缓存原始页面尺寸（仅存一次）
-                                    if (_originalPageWidth == 0 || _originalPageHeight == 0)
-                                    {
-                                        _originalPageWidth = pageBitmap.Width;
-                                        _originalPageHeight = pageBitmap.Height;
-                                        LogHelper.Debug($"[PdfPreviewControl] 缓存原始页面尺寸: 宽={_originalPageWidth}, 高={_originalPageHeight}");
-                                    }
-                                    
-                                    // 应用缩放（在渲染后缩放可能影响质量，这里只做缩放计算）
-                                    int scaledWidth = (int)(pageBitmap.Width * _currentZoom / 100f);
-                                    int scaledHeight = (int)(pageBitmap.Height * _currentZoom / 100f);
-
-                                    // 缩放图片（如果需要）
-                                    if (Math.Abs(_currentZoom - 100f) > 0.1f)
-                                    {
-                                        Bitmap scaledBitmap = new Bitmap(pageBitmap, scaledWidth, scaledHeight);
-                                        pageBitmap.Dispose();
-                                        pageBitmap = scaledBitmap;
-                                    }
-
-                                    // 在 UI 线程更新显示
-                                    if (InvokeRequired)
-                                    {
-                                        Invoke(new Action(() =>
-                                        {
-                                            _pictureBox.Image?.Dispose();
-                                            _pictureBox.Image = pageBitmap;
-                                            LogHelper.Debug($"[PdfPreviewControl] ✅ 第 {_currentPageIndex + 1}/{_totalPages} 页已渲染，缩放: {_currentZoom:F0}%");
-                                        }));
-                                    }
-                                    else
-                                    {
-                                        _pictureBox.Image?.Dispose();
-                                        _pictureBox.Image = pageBitmap;
-                                        LogHelper.Debug($"[PdfPreviewControl] ✅ 第 {_currentPageIndex + 1}/{_totalPages} 页已渲染，缩放: {_currentZoom:F0}%");
-                                    }
-                                }
-                                else
-                                {
-                                    LogHelper.Error($"[PdfPreviewControl] 渲染第 {_currentPageIndex + 1} 页失败");
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        LogHelper.Error($"[PdfPreviewControl] PDF 渲染异常: {ex.Message}");
-                        OnLoadError(ex);
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PdfPreviewControl] 异步刷新页面异常: {ex.Message}");
-                OnLoadError(ex);
-            }
+            base.OnResize(e);
+            // CefSharp自动处理页面适应，无需额外操作
         }
 
         #endregion
@@ -587,8 +413,7 @@ namespace WindowsFormsApp3.Controls
             {
                 try
                 {
-                    _pictureBox?.Image?.Dispose();
-                    _pictureBox?.Dispose();
+                    _cefControl?.Dispose();
                 }
                 catch { }
             }

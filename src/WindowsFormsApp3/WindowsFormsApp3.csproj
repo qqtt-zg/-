@@ -12,6 +12,10 @@
     <Deterministic>true</Deterministic>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- 根据Context7文档添加CefSharp所需的RuntimeIdentifier配置 -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <SelfContained Condition="'$(SelfContained)' == ''">false</SelfContained>
   </PropertyGroup>
 
   <!-- 确保图标文件被正确嵌入为资源 -->
@@ -47,6 +51,8 @@
   <!-- NuGet包引用 -->
   <ItemGroup>
     <PackageReference Include="AntdUI" Version="2.1.12" />
+    <PackageReference Include="CefSharp.Common" Version="119.1.20" />
+    <PackageReference Include="CefSharp.WinForms" Version="119.1.20" />
     <PackageReference Include="EPPlus" Version="5.0.4" />
     <PackageReference Include="itext" Version="9.3.0" />
     <PackageReference Include="itext.bouncy-castle-adapter" Version="9.3.0" />

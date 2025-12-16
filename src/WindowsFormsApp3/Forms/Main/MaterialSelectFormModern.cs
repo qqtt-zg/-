@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Text;
@@ -111,7 +112,12 @@ namespace WindowsFormsApp3
         private const int BASE_FORM_HEIGHT = 859; // 匹配设计器中的ClientSize设置 (400, 859) // 调整基础高度使运行时窗口高度匹配设计器896px (896 - 276系统边框) // 调整基础高度使运行时窗口高度匹配设计器896px (638 - 53) // 窗体基础高度（不含预览面板，包括折叠按钮）(661-23)
         private const int MAX_PREVIEW_HEIGHT = 245; // 预览最大高度（匹配设计器设置） // 预览最大高度（调整填满底部）
         private string _cachedPdfPath; // 缓存的 PDF 路径（用于检查是否为新文件）
+        private string _pendingPdfToLoad; // 待加载的PDF文件路径（用于窗体加载完成后）
         private const string PREVIEW_STATE_KEY = "PdfPreviewExpanded"; // 注册表键名
+
+        // 延迟初始化相关字段
+        private WindowsFormsApp3.Controls.PdfPreviewControl _realPdfPreviewControl; // 真实的PDF预览控件
+        private bool _pdfControlInitialized = false; // PDF控件是否已初始化
 
         // 保留原有属性以兼容现有代码（后续版本可移除）
         [Obsolete("请使用SelectedShape代替")]
@@ -246,6 +252,26 @@ namespace WindowsFormsApp3
 
             // 绑定窗口位置管理事件
             this.FormClosing += MaterialSelectFormModern_FormClosing;
+
+            // 延迟初始化PDF预览控件（在设计器模式下不会执行）
+            if (!IsDesignMode())
+            {
+                // 在后台线程中初始化，避免阻塞UI
+                Task.Run(() =>
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        try
+                        {
+                            InitializePdfPreviewControl();
+                        }
+                        catch (Exception ex)
+                        {
+                            LogHelper.Error($"[PDF 预览] 后台初始化失败: {ex.Message}");
+                        }
+                    }));
+                });
+            }
         }
 
         /// <summary>
@@ -409,6 +435,19 @@ namespace WindowsFormsApp3
                             pdfPreviewPanel.Height = MAX_PREVIEW_HEIGHT;
                             this.ClientSize = new Size(400, 859);  // 🔧 添加：设置展开状态窗体大小
                             previewCollapseButton.Text = "▲";
+
+                            // ✅ 如果有待加载的PDF且预览已展开，现在加载它
+                            if (!string.IsNullOrEmpty(_pendingPdfToLoad))
+                            {
+                                // 延迟一小段时间确保UI完全渲染
+                                this.BeginInvoke(new Action(async () =>
+                                {
+                                    await Task.Delay(100); // 减少延迟时间
+                                    await TryLoadPendingPdf();
+                                    LogHelper.Debug("[PDF 预览] 状态检查后调用TryLoadPendingPdf");
+                                }));
+                            }
+
                             LogHelper.Debug("[状态检查] 确认展开状态UI和窗体大小");
                         }
                         else
@@ -2685,6 +2724,16 @@ namespace WindowsFormsApp3
         {
             LogHelper.Debug("MaterialSelectFormModern_Load事件被触发");
 
+            // 注意：CefSharp初始化已移至Program.cs，在应用程序启动时统一处理
+            if (!CefSharpInitializer.IsInitialized)
+            {
+                LogHelper.Warn("[CefSharp] 警告：CefSharp未在应用程序启动时初始化，这可能导致PDF预览功能异常");
+            }
+            else
+            {
+                LogHelper.Debug("[CefSharp] 窗体加载，CefSharp已正确初始化");
+            }
+
             // 使用API设置窗口透明度，确保文字不透明
             if (_opacityValue < 1.0)
             {
@@ -2716,22 +2765,21 @@ namespace WindowsFormsApp3
             pdfPreviewPanel.Height = 0;
             this.ClientSize = new System.Drawing.Size(400, 614); // 初始设置为折叠状态
 
-            // ✅ 在恢复展开状态前，先加载初始 PDF 文件（如果存在）
+            // ✅ 保存当前需要加载的PDF文件路径
             if (!string.IsNullOrEmpty(CurrentFileName) && File.Exists(CurrentFileName))
             {
-                // 异步加载 PDF，但不等待完成
-                // 这样可以避免 Load 事件阻塞，同时确保展开时有内容可显示
-                _ = LoadPdfPreviewAsync(CurrentFileName);
-                LogHelper.Debug($"[PDF 预览] Load 事件中预加载 PDF: {CurrentFileName}");
+                _pendingPdfToLoad = CurrentFileName;
+                LogHelper.Debug($"[PDF 预览] Load 事件中标记待加载 PDF: {CurrentFileName}");
             }
 
             // 🔧 优化：预览状态已在PrePositionWindow中恢复，这里只做一致性检查
             EnsurePreviewStateConsistency();
 
             // ✅ 订阅 PDF 预览控件的事件，更新页码显示
-            if (pdfPreviewControl != null)
+            var pdfControl = PdfPreview;
+            if (pdfControl != null)
             {
-                pdfPreviewControl.PageLoaded += PdfPreviewControl_PageLoaded;
+                pdfControl.PageLoaded += PdfPreviewControl_PageLoaded;
             }
 
             // 检查Excel数据的有效性
@@ -2881,6 +2929,14 @@ namespace WindowsFormsApp3
         {
             // 在窗体显示后设置焦点，确保句柄已创建
             this.BeginInvoke(new Action(SetOrderTextBoxFocus));
+
+            // 添加PDF预览检查，确保PDF能够自动加载
+            this.BeginInvoke(new Action(async () =>
+            {
+                await Task.Delay(200); // 等待窗体完全渲染
+                await TryLoadPendingPdf();
+                LogHelper.Debug("[PDF 预览] Shown事件中检查PDF加载");
+            }));
         }
 
         /// <summary>
@@ -2893,7 +2949,7 @@ namespace WindowsFormsApp3
                 // 保存窗口位置和状态
                 WindowPositionManager.SaveWindowPosition(this, _isPreviewExpanded);
                 LogHelper.Debug($"[MaterialSelectFormModern] 保存窗口位置: Location={this.Location}, Size={this.Size}, PreviewExpanded={_isPreviewExpanded}");
-                
+
                 // 🔧 关键修复：立即提交所有待处理的设置更改，确保窗口位置被保存到文件
                 // 不能只依赖5秒自动保存定时器，因为窗口关闭的速度可能更快
                 AppSettings.CommitChanges();
@@ -2903,6 +2959,9 @@ namespace WindowsFormsApp3
             {
                 LogHelper.Error($"[MaterialSelectFormModern] 保存窗口位置失败: {ex.Message}", ex);
             }
+
+            // 注意：CefSharp资源管理已移至Program.cs，不在窗体级别处理
+            LogHelper.Debug("[MaterialSelectFormModern] 窗体关闭完成");
         }
 
         /// <summary>
@@ -6024,13 +6083,19 @@ namespace WindowsFormsApp3
                     pdfPreviewPanel.Height = MAX_PREVIEW_HEIGHT;
                     this.ClientSize = new System.Drawing.Size(400, 859); // 恢复到设计器大小
                     previewCollapseButton.Text = "▲"; // 上箭头
-                    
-                    // ✅ 展开后触发高度适应缩放
-                    if (pdfPreviewControl.PageCount > 0)
+
+                    // ✅ 如果有待加载的PDF，现在加载它
+                    if (!string.IsNullOrEmpty(_pendingPdfToLoad))
                     {
-                        float fitZoom = pdfPreviewControl.CalculateFitToHeightZoom();
-                        pdfPreviewControl.CurrentZoom = fitZoom;
-                        LogHelper.Debug($"[PDF 预览] 展开后应用适应高度缩放: {fitZoom:F0}%");
+                        _ = TryLoadPendingPdf();
+                        LogHelper.Debug("[PDF 预览] 展开时调用TryLoadPendingPdf");
+                    }
+
+                    // ✅ 展开后触发最优适应缩放
+                    if ((PdfPreview?.PageCount ?? 0) > 0)
+                    {
+                        PdfPreview?.ApplyBestFit();
+                        LogHelper.Debug("[PDF 预览] 展开后应用最优适应缩放");
                     }
                 }
                 else
@@ -6064,7 +6129,7 @@ namespace WindowsFormsApp3
         /// </summary>
         private void TabButtonPrevious_Click(object sender, EventArgs e)
         {
-            pdfPreviewControl?.PreviousPage();
+            PdfPreview?.PreviousPage();
             // ✅ 更新页码显示
             UpdatePageInfoDisplay();
         }
@@ -6074,52 +6139,12 @@ namespace WindowsFormsApp3
         /// </summary>
         private void TabButtonNext_Click(object sender, EventArgs e)
         {
-            pdfPreviewControl?.NextPage();
+            PdfPreview?.NextPage();
             // ✅ 更新页码显示
             UpdatePageInfoDisplay();
         }
 
-        /// <summary>
-        /// 首页按钮
-        /// </summary>
-        private void TabButtonFirst_Click(object sender, EventArgs e)
-        {
-            pdfPreviewControl?.GoToPage(0);  // 跳转到第一页（第0页）
-            // ✅ 更新页码显示
-            UpdatePageInfoDisplay();
-            LogHelper.Debug("[PDF 预览] 跳转到第一页");
-        }
-
-        /// <summary>
-        /// 末页按钮
-        /// </summary>
-        private void TabButtonLast_Click(object sender, EventArgs e)
-        {
-            if (pdfPreviewControl?.PageCount > 0)
-            {
-                pdfPreviewControl?.GoToPage(pdfPreviewControl.PageCount - 1);
-                // ✅ 更新页码显示
-                UpdatePageInfoDisplay();
-                LogHelper.Debug($"[PDF 预览] 跳转到最后一页（第 {pdfPreviewControl.PageCount} 页）");
-            }
-        }
-
-        /// <summary>
-        /// 缩小按钮
-        /// </summary>
-        private void TabButtonZoomOut_Click(object sender, EventArgs e)
-        {
-            pdfPreviewControl?.ZoomOut();
-        }
-
-        /// <summary>
-        /// 放大按钮
-        /// </summary>
-        private void TabButtonZoomIn_Click(object sender, EventArgs e)
-        {
-            pdfPreviewControl?.ZoomIn();
-        }
-
+  
         /// <summary>
         /// 刷新按銵
         /// </summary>
@@ -6130,8 +6155,8 @@ namespace WindowsFormsApp3
                 if (!string.IsNullOrEmpty(_cachedPdfPath) && File.Exists(_cachedPdfPath))
                 {
                     // 清除缓存，强制重新加载
-                    pdfPreviewControl?.ClearCache();
-                    bool success = await pdfPreviewControl.LoadPdfAsync(_cachedPdfPath);
+                    PdfPreview?.ClearCache();
+                    bool success = await PdfPreview.LoadPdfAsync(_cachedPdfPath);
                     LogHelper.Debug($"[PDF 预覧] 刷新了 PDF: {_cachedPdfPath}, 结果: {success}");
                 }
             }
@@ -6141,84 +6166,7 @@ namespace WindowsFormsApp3
             }
         }
         
-        /// <summary>
-        /// 适应页面宽度按钮
-        /// </summary>
-        private void TabButtonFitWidth_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (pdfPreviewControl == null)
-                {
-                    LogHelper.Warn("[PDF 预览] pdfPreviewControl 为 null");
-                    return;
-                }
-
-                if (pdfPreviewControl.PageCount <= 0)
-                {
-                    LogHelper.Warn($"[PDF 预览] 页数无效: {pdfPreviewControl.PageCount}");
-                    return;
-                }
-
-                // ✅ 计算并应用适应宽度的缩放
-                float fitZoom = pdfPreviewControl.CalculateFitToWidthZoom();
-                LogHelper.Debug($"[PDF 预览] 计算得到的适应宽度缩放: {fitZoom:F0}%");
-                
-                if (fitZoom <= 0 || fitZoom > 400)
-                {
-                    LogHelper.Warn($"[PDF 预览] 计算的缩放值超出范围: {fitZoom}");
-                    return;
-                }
-
-                // 直接设置缩放，CurrentZoom setter 会触发 RefreshCurrentPage
-                pdfPreviewControl.CurrentZoom = fitZoom;
-                LogHelper.Debug($"[PDF 预览] ✅ 已应用适应宽度缩放: {fitZoom:F0}%");
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PDF 预览] 适应宽度失败: {ex.Message}");
-            }
-        }
-        
-        /// <summary>
-        /// 适应页面高度按钮
-        /// </summary>
-        private void TabButtonFitHeight_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (pdfPreviewControl == null)
-                {
-                    LogHelper.Warn("[PDF 预览] pdfPreviewControl 为 null");
-                    return;
-                }
-
-                if (pdfPreviewControl.PageCount <= 0)
-                {
-                    LogHelper.Warn($"[PDF 预览] 页数无效: {pdfPreviewControl.PageCount}");
-                    return;
-                }
-
-                // ✅ 计算并应用适应高度的缩放
-                float fitZoom = pdfPreviewControl.CalculateFitToHeightZoom();
-                LogHelper.Debug($"[PDF 预览] 计算得到的适应高度缩放: {fitZoom:F0}%");
-                
-                if (fitZoom <= 0 || fitZoom > 400)
-                {
-                    LogHelper.Warn($"[PDF 预览] 计算的缩放值超出范围: {fitZoom}");
-                    return;
-                }
-
-                // 直接设置缩放，CurrentZoom setter 会触发 RefreshCurrentPage
-                pdfPreviewControl.CurrentZoom = fitZoom;
-                LogHelper.Debug($"[PDF 预览] ✅ 已应用适应高度缩放: {fitZoom:F0}%");
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PDF 预览] 适应高度失败: {ex.Message}");
-            }
-        }
-
+  
         /// <summary>
         /// 更新页码显示标签
         /// </summary>
@@ -6231,8 +6179,8 @@ namespace WindowsFormsApp3
                     return;
                 }
 
-                int currentPage = pdfPreviewControl.CurrentPageIndex + 1;  // 转换为以 1 开头的页码
-                int totalPages = pdfPreviewControl.PageCount;
+                int currentPage = PdfPreview?.CurrentPageIndex ?? 0 + 1;  // 转换为以 1 开头的页码
+                int totalPages = PdfPreview?.PageCount ?? 0;
                 
                 // ✅ 在 UI 线程中更新标签
                 if (pageInfoLabel.InvokeRequired)
@@ -6269,19 +6217,17 @@ namespace WindowsFormsApp3
                     pageInfoLabel.Invoke(new Action(() =>
                     {
                         pageInfoLabel.Text = $"{e.PageIndex + 1} / {e.PageCount}";
-                        // ✅ 应用默认的适应高度缩放
-                        float fitZoom = pdfPreviewControl.CalculateFitToHeightZoom();
-                        pdfPreviewControl.CurrentZoom = fitZoom;
-                        LogHelper.Debug($"[PDF 预览] 页面加载完成，应用默认适应高度缩放: {fitZoom:F0}%");
+                        // ✅ 应用默认的最优适应缩放
+                        PdfPreview?.ApplyBestFit();
+                        LogHelper.Debug("[PDF 预览] 页面加载完成，应用默认最优适应缩放");
                     }));
                 }
                 else
                 {
                     pageInfoLabel.Text = $"{e.PageIndex + 1} / {e.PageCount}";
-                    // ✅ 应用默认的适应高度缩放
-                    float fitZoom = pdfPreviewControl.CalculateFitToHeightZoom();
-                    pdfPreviewControl.CurrentZoom = fitZoom;
-                    LogHelper.Debug($"[PDF 预览] 页面加载完成，应用默认适应高度缩放: {fitZoom:F0}%");
+                    // ✅ 应用默认的最优适应缩放
+                    PdfPreview?.ApplyBestFit();
+                    LogHelper.Debug("[PDF 预览] 页面加载完成，应用默认最优适应缩放");
                 }
 
                 LogHelper.Debug($"[PDF 预览] 页码显示更新: {e.PageIndex + 1} / {e.PageCount}");
@@ -6318,7 +6264,7 @@ namespace WindowsFormsApp3
                 }
 
                 // 加载到预览控件
-                bool success = await pdfPreviewControl.LoadPdfAsync(filePath);
+                bool success = await PdfPreview.LoadPdfAsync(filePath);
                 if (success && !_isPreviewExpanded)
                 {
                     // 加载成功后，好为用户自动展开预览
@@ -6351,6 +6297,40 @@ namespace WindowsFormsApp3
         }
 
         /// <summary>
+        /// 尝试加载待处理的PDF文件
+        /// 统一的PDF加载检查方法，确保PDF能够自动显示
+        /// </summary>
+        private async Task TryLoadPendingPdf()
+        {
+            try
+            {
+                if (_isPreviewExpanded && !string.IsNullOrEmpty(_pendingPdfToLoad))
+                {
+                    LogHelper.Debug($"[PDF 预览] 尝试加载待处理的PDF: {_pendingPdfToLoad}");
+
+                    // 确保文件仍然存在
+                    if (File.Exists(_pendingPdfToLoad))
+                    {
+                        await LoadPdfPreviewAsync(_pendingPdfToLoad);
+                        _pendingPdfToLoad = null;
+                        LogHelper.Debug("[PDF 预览] PDF加载成功");
+                    }
+                    else
+                    {
+                        LogHelper.Warn($"[PDF 预览] PDF文件不存在: {_pendingPdfToLoad}");
+                        _pendingPdfToLoad = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PDF 预览] 加载PDF失败: {ex.Message}", ex);
+                // 清除待加载的PDF，避免重复尝试
+                _pendingPdfToLoad = null;
+            }
+        }
+
+        /// <summary>
         /// 从设置中加载 PDF 预览状态
         /// </summary>
         private void LoadPreviewStateFromSettings()
@@ -6369,12 +6349,11 @@ namespace WindowsFormsApp3
                     this.ClientSize = new Size(400, 859);  // 🔧 添加：设置展开状态窗体大小
                     previewCollapseButton.Text = "▲";
 
-                    // 展开后触发高度适应缩放
-                    if (pdfPreviewControl.PageCount > 0)
+                    // 展开后触发最优适应缩放
+                    if ((PdfPreview?.PageCount ?? 0) > 0)
                     {
-                        float fitZoom = pdfPreviewControl.CalculateFitToHeightZoom();
-                        pdfPreviewControl.CurrentZoom = fitZoom;
-                        LogHelper.Debug($"[PDF 预览] 从设置恢复展开状态，应用缩放: {fitZoom:F0}%");
+                        PdfPreview?.ApplyBestFit();
+                        LogHelper.Debug("[PDF 预览] 从设置恢复展开状态，应用最优适应缩放");
                     }
 
                     LogHelper.Debug("[PDF 预览] 从设置恢复展开状态（直接设置，避免位置干扰）");
@@ -6397,6 +6376,179 @@ namespace WindowsFormsApp3
             catch (Exception ex)
             {
                 LogHelper.Error($"[PDF 预览] 加载状态失败: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region PDF预览控件延迟初始化
+
+        /// <summary>
+        /// 检测是否处于设计模式
+        /// </summary>
+        private bool IsDesignMode()
+        {
+            return DesignMode ||
+                   LicenseManager.UsageMode == LicenseUsageMode.Designtime ||
+                   System.Diagnostics.Process.GetCurrentProcess().ProcessName == "devenv";
+        }
+
+        /// <summary>
+        /// 初始化PDF预览控件（延迟初始化）
+        /// </summary>
+        private void InitializePdfPreviewControl()
+        {
+            if (_pdfControlInitialized)
+            {
+                LogHelper.Debug("[PDF 预览] 控件已初始化，跳过重复初始化");
+                return;
+            }
+
+            if (IsDesignMode())
+            {
+                LogHelper.Debug("[PDF 预览] 设计模式下，保持占位符");
+                return;
+            }
+
+            try
+            {
+                LogHelper.Debug("[PDF 预览] 开始初始化真实PDF预览控件");
+
+                // 运行时创建真实的PDF预览控件
+                _realPdfPreviewControl = new WindowsFormsApp3.Controls.PdfPreviewControl();
+                _realPdfPreviewControl.Dock = DockStyle.Fill;
+                _realPdfPreviewControl.Name = "realPdfPreviewControl";
+
+                // 设置事件绑定
+                _realPdfPreviewControl.PageLoaded += RealPdfPreviewControl_PageLoaded;
+                _realPdfPreviewControl.LoadError += RealPdfPreviewControl_LoadError;
+
+                // 替换占位符
+                if (pdfPreviewControl != null && pdfPreviewPanel != null)
+                {
+                    pdfPreviewPanel.Controls.Remove(pdfPreviewControl);
+                    pdfPreviewPanel.Controls.Add(_realPdfPreviewControl);
+
+                    LogHelper.Debug("[PDF 预览] 真实PDF控件已添加到预览面板");
+                }
+
+                _pdfControlInitialized = true;
+                LogHelper.Info("[PDF 预览] PDF预览控件初始化完成");
+
+                // 如果有待加载的PDF，现在加载它
+                if (!string.IsNullOrEmpty(_pendingPdfToLoad))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(100); // 短暂等待确保UI完全准备好
+                        await LoadPdfPreviewAsync(_pendingPdfToLoad);
+                        _pendingPdfToLoad = null;
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PDF 预览] 初始化失败: {ex.Message}", ex);
+
+                // 创建错误占位符
+                CreateErrorPlaceholder(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// 创建错误占位符
+        /// </summary>
+        private void CreateErrorPlaceholder(string errorMessage)
+        {
+            try
+            {
+                if (pdfPreviewPanel != null && pdfPreviewPanel.InvokeRequired)
+                {
+                    pdfPreviewPanel.Invoke(new Action(() => CreateErrorPlaceholder(errorMessage)));
+                    return;
+                }
+
+                var errorLabel = new System.Windows.Forms.Label
+                {
+                    Text = $"PDF预览组件初始化失败\n{errorMessage}",
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = Color.Red,
+                    BackColor = Color.LightGray,
+                    Font = new System.Drawing.Font("Microsoft YaHei", 9f)
+                };
+
+                if (pdfPreviewPanel != null)
+                {
+                    pdfPreviewPanel.Controls.Clear();
+                    pdfPreviewPanel.Controls.Add(errorLabel);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PDF 预览] 创建错误占位符失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 获取真实的PDF预览控件（兼容现有代码）
+        /// </summary>
+        private WindowsFormsApp3.Controls.PdfPreviewControl GetRealPdfPreviewControl()
+        {
+            if (!_pdfControlInitialized && !IsDesignMode())
+            {
+                InitializePdfPreviewControl();
+            }
+            return _realPdfPreviewControl;
+        }
+
+        /// <summary>
+        /// PDF预览控件的兼容属性（自动延迟初始化）
+        /// </summary>
+        private WindowsFormsApp3.Controls.PdfPreviewControl PdfPreview
+        {
+            get
+            {
+                var realControl = GetRealPdfPreviewControl();
+                if (realControl == null && !IsDesignMode())
+                {
+                    // 如果真实控件为空且不是设计模式，创建一个默认的
+                    LogHelper.Warn("[PDF 预览] 真实PDF控件为空，返回默认控件");
+                    realControl = new WindowsFormsApp3.Controls.PdfPreviewControl();
+                }
+                return realControl;
+            }
+        }
+
+        /// <summary>
+        /// 真实PDF控件的页面加载事件
+        /// </summary>
+        private void RealPdfPreviewControl_PageLoaded(object sender, EventArgs e)
+        {
+            try
+            {
+                LogHelper.Debug("[PDF 预览] 真实PDF控件页面加载完成");
+                UpdatePageInfoDisplay();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PDF 预览] 处理页面加载事件失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 真实PDF控件的加载错误事件
+        /// </summary>
+        private void RealPdfPreviewControl_LoadError(object sender, EventArgs e)
+        {
+            try
+            {
+                LogHelper.Warn("[PDF 预览] 真实PDF控件加载出错");
+                // 可以在这里显示用户友好的错误信息
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[PDF 预览] 处理加载错误事件失败: {ex.Message}");
             }
         }
 

@@ -12,10 +12,7 @@ namespace WindowsFormsApp3
         /// </summary>
         private System.ComponentModel.IContainer components = null;
         
-        // PDF 预览控制栏按钮字段
-        private AntdUI.Button tabButtonFitWidth;
-        private AntdUI.Button tabButtonFitHeight;
-
+    
         /// <summary>
         /// Clean up any resources being used.
         /// </summary>
@@ -102,15 +99,9 @@ namespace WindowsFormsApp3
             this.previewControlBar = new System.Windows.Forms.Panel();
             this.tabButtonPrevious = new AntdUI.Button();
             this.tabButtonNext = new AntdUI.Button();
-            this.tabButtonFirst = new AntdUI.Button();
-            this.tabButtonLast = new AntdUI.Button();
             this.pageInfoLabel = new System.Windows.Forms.Label();
-            this.tabButtonZoomOut = new AntdUI.Button();
-            this.tabButtonZoomIn = new AntdUI.Button();
-            this.tabButtonFitWidth = new AntdUI.Button();
-            this.tabButtonFitHeight = new AntdUI.Button();
             this.tabButtonRefresh = new AntdUI.Button();
-            this.pdfPreviewControl = new WindowsFormsApp3.Controls.PdfPreviewControl();
+            this.pdfPreviewControl = new System.Windows.Forms.Panel();
             this.tabs1.SuspendLayout();
             this.tabPage3.SuspendLayout();
             this.materialTypeGroupBox.SuspendLayout();
@@ -820,158 +811,72 @@ namespace WindowsFormsApp3
             this.pdfPreviewPanel.Name = "pdfPreviewPanel";
             this.pdfPreviewPanel.Size = new System.Drawing.Size(400, 245);
             this.pdfPreviewPanel.TabIndex = 61;
-            // 
+            //
             // previewControlBar
-            // 
+            //
             this.previewControlBar.BackColor = System.Drawing.Color.White;
             this.previewControlBar.Controls.Add(this.tabButtonPrevious);
             this.previewControlBar.Controls.Add(this.tabButtonNext);
-            this.previewControlBar.Controls.Add(this.tabButtonFirst);
-            this.previewControlBar.Controls.Add(this.tabButtonLast);
             this.previewControlBar.Controls.Add(this.pageInfoLabel);
-            this.previewControlBar.Controls.Add(this.tabButtonZoomOut);
-            this.previewControlBar.Controls.Add(this.tabButtonZoomIn);
-            this.previewControlBar.Controls.Add(this.tabButtonFitWidth);
-            this.previewControlBar.Controls.Add(this.tabButtonFitHeight);
             this.previewControlBar.Controls.Add(this.tabButtonRefresh);
             this.previewControlBar.Dock = System.Windows.Forms.DockStyle.Bottom;
             this.previewControlBar.Location = new System.Drawing.Point(0, 213);
             this.previewControlBar.Name = "previewControlBar";
             this.previewControlBar.Size = new System.Drawing.Size(400, 32);
             this.previewControlBar.TabIndex = 1;
-            // 
+            //
             // tabButtonPrevious
-            // 
+            //
             this.tabButtonPrevious.BorderWidth = 1F;
             this.tabButtonPrevious.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.tabButtonPrevious.Ghost = true;
-            this.tabButtonPrevious.Location = new System.Drawing.Point(37, 4);
+            this.tabButtonPrevious.Location = new System.Drawing.Point(10, 4);
             this.tabButtonPrevious.Name = "tabButtonPrevious";
             this.tabButtonPrevious.Size = new System.Drawing.Size(30, 24);
             this.tabButtonPrevious.TabIndex = 0;
             this.tabButtonPrevious.Text = "<";
             this.tabButtonPrevious.WaveSize = 0;
             this.tabButtonPrevious.Click += new System.EventHandler(this.TabButtonPrevious_Click);
-            // 
+            //
             // tabButtonNext
-            // 
+            //
             this.tabButtonNext.BorderWidth = 1F;
             this.tabButtonNext.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.tabButtonNext.Ghost = true;
-            this.tabButtonNext.Location = new System.Drawing.Point(135, 4);
+            this.tabButtonNext.Location = new System.Drawing.Point(50, 4);
             this.tabButtonNext.Name = "tabButtonNext";
             this.tabButtonNext.Size = new System.Drawing.Size(30, 24);
             this.tabButtonNext.TabIndex = 1;
             this.tabButtonNext.Text = ">";
             this.tabButtonNext.WaveSize = 0;
             this.tabButtonNext.Click += new System.EventHandler(this.TabButtonNext_Click);
-            // 
-            // tabButtonFirst
-            // 
-            this.tabButtonFirst.BorderWidth = 1F;
-            this.tabButtonFirst.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonFirst.Ghost = true;
-            this.tabButtonFirst.Location = new System.Drawing.Point(3, 4);
-            this.tabButtonFirst.Name = "tabButtonFirst";
-            this.tabButtonFirst.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonFirst.TabIndex = 2;
-            this.tabButtonFirst.Text = "|<";
-            this.tabButtonFirst.WaveSize = 0;
-            this.tabButtonFirst.Click += new System.EventHandler(this.TabButtonFirst_Click);
-            // 
-            // tabButtonLast
-            // 
-            this.tabButtonLast.BorderWidth = 1F;
-            this.tabButtonLast.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonLast.Ghost = true;
-            this.tabButtonLast.Location = new System.Drawing.Point(170, 4);
-            this.tabButtonLast.Name = "tabButtonLast";
-            this.tabButtonLast.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonLast.TabIndex = 3;
-            this.tabButtonLast.Text = ">|";
-            this.tabButtonLast.WaveSize = 0;
-            this.tabButtonLast.Click += new System.EventHandler(this.TabButtonLast_Click);
-            // 
+              //
             // pageInfoLabel
-            // 
+            //
             this.pageInfoLabel.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.pageInfoLabel.Location = new System.Drawing.Point(72, 8);
+            this.pageInfoLabel.Location = new System.Drawing.Point(95, 8);
             this.pageInfoLabel.Name = "pageInfoLabel";
             this.pageInfoLabel.Size = new System.Drawing.Size(58, 16);
             this.pageInfoLabel.TabIndex = 7;
             this.pageInfoLabel.Text = "0 / 0";
             this.pageInfoLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            // 
-            // tabButtonZoomOut
-            // 
-            this.tabButtonZoomOut.BorderWidth = 1F;
-            this.tabButtonZoomOut.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonZoomOut.Ghost = true;
-            this.tabButtonZoomOut.Location = new System.Drawing.Point(205, 4);
-            this.tabButtonZoomOut.Name = "tabButtonZoomOut";
-            this.tabButtonZoomOut.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonZoomOut.TabIndex = 4;
-            this.tabButtonZoomOut.Text = "-";
-            this.tabButtonZoomOut.WaveSize = 0;
-            this.tabButtonZoomOut.Click += new System.EventHandler(this.TabButtonZoomOut_Click);
-            // 
-            // tabButtonZoomIn
-            // 
-            this.tabButtonZoomIn.BorderWidth = 1F;
-            this.tabButtonZoomIn.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonZoomIn.Ghost = true;
-            this.tabButtonZoomIn.Location = new System.Drawing.Point(243, 4);
-            this.tabButtonZoomIn.Name = "tabButtonZoomIn";
-            this.tabButtonZoomIn.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonZoomIn.TabIndex = 5;
-            this.tabButtonZoomIn.Text = "+";
-            this.tabButtonZoomIn.WaveSize = 0;
-            this.tabButtonZoomIn.Click += new System.EventHandler(this.TabButtonZoomIn_Click);
-            // 
-            // tabButtonFitWidth
-            // 
-            this.tabButtonFitWidth.BorderWidth = 1F;
-            this.tabButtonFitWidth.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonFitWidth.Ghost = true;
-            this.tabButtonFitWidth.Location = new System.Drawing.Point(280, 4);
-            this.tabButtonFitWidth.Name = "tabButtonFitWidth";
-            this.tabButtonFitWidth.Size = new System.Drawing.Size(32, 24);
-            this.tabButtonFitWidth.TabIndex = 7;
-            this.tabButtonFitWidth.Text = "宽";
-            this.tabButtonFitWidth.WaveSize = 0;
-            this.tabButtonFitWidth.Click += new System.EventHandler(this.TabButtonFitWidth_Click);
-            // 
-            // tabButtonFitHeight
-            // 
-            this.tabButtonFitHeight.BorderWidth = 1F;
-            this.tabButtonFitHeight.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonFitHeight.Ghost = true;
-            this.tabButtonFitHeight.Location = new System.Drawing.Point(318, 4);
-            this.tabButtonFitHeight.Name = "tabButtonFitHeight";
-            this.tabButtonFitHeight.Size = new System.Drawing.Size(32, 24);
-            this.tabButtonFitHeight.TabIndex = 8;
-            this.tabButtonFitHeight.Text = "高";
-            this.tabButtonFitHeight.WaveSize = 0;
-            this.tabButtonFitHeight.Click += new System.EventHandler(this.TabButtonFitHeight_Click);
-            // 
+            //
             // tabButtonRefresh
-            // 
+            //
             this.tabButtonRefresh.BorderWidth = 1F;
             this.tabButtonRefresh.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
             this.tabButtonRefresh.Ghost = true;
-            this.tabButtonRefresh.Location = new System.Drawing.Point(356, 4);
+            this.tabButtonRefresh.Location = new System.Drawing.Point(330, 4);
             this.tabButtonRefresh.Name = "tabButtonRefresh";
-            this.tabButtonRefresh.Size = new System.Drawing.Size(40, 24);
+            this.tabButtonRefresh.Size = new System.Drawing.Size(60, 24);
             this.tabButtonRefresh.TabIndex = 9;
             this.tabButtonRefresh.Text = "刷新";
             this.tabButtonRefresh.WaveSize = 0;
             this.tabButtonRefresh.Click += new System.EventHandler(this.TabButtonRefresh_Click);
             // 
             // pdfPreviewControl
-            // 
+            //
             this.pdfPreviewControl.BackColor = System.Drawing.Color.White;
-            this.pdfPreviewControl.CurrentPageIndex = 0;
-            this.pdfPreviewControl.CurrentZoom = 100F;
             this.pdfPreviewControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pdfPreviewControl.Location = new System.Drawing.Point(0, 0);
             this.pdfPreviewControl.Margin = new System.Windows.Forms.Padding(0);
@@ -1115,15 +1020,11 @@ namespace WindowsFormsApp3
         // PDF 预览相关控件
         private AntdUI.Button previewCollapseButton;
         private System.Windows.Forms.Panel pdfPreviewPanel;
-        private WindowsFormsApp3.Controls.PdfPreviewControl pdfPreviewControl;
+        private System.Windows.Forms.Panel pdfPreviewControl;
         private System.Windows.Forms.Panel previewControlBar;
         private AntdUI.Button tabButtonPrevious;
         private AntdUI.Button tabButtonNext;
-        private AntdUI.Button tabButtonFirst;
-        private AntdUI.Button tabButtonLast;
         private System.Windows.Forms.Label pageInfoLabel;
-        private AntdUI.Button tabButtonZoomOut;
-        private AntdUI.Button tabButtonZoomIn;
         private AntdUI.Button tabButtonRefresh;
     }
 }

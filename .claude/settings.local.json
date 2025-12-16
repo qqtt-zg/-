@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet build:*)",
+      "Bash(dotnet list:*)",
+      "Bash(\"大诚重命名工具.exe\")",
+      "Bash(start:*)",
+      "Bash(findstr:*)",
+      "Bash(CreateTestPdf.exe:*)",
+      "Bash(tasklist:*)",
+      "Bash(powershell:*)",
+      "Bash(find:*)",
+      "Bash(taskkill:*)",
+      "Bash(dotnet nuget locals:*)"
+    ]
+  }
+}
