@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows.Forms;
 using CefSharp;
 using CefSharp.WinForms;
+using System.Collections.Generic;
 
 namespace WindowsFormsApp3.Utils
 {
@@ -52,8 +53,12 @@ namespace WindowsFormsApp3.Utils
                     Locale = "zh-CN"
                 };
 
+                // 添加命令行参数优化PDF显示
+                // 注意：不要禁用pdf-embedded-viewer，否则工具栏不会显示
+                settings.CefCommandLineArgs.Add("force-prefers-reduced-motion", "0");
+
                 // 初始化Cef
-                if (!Cef.IsInitialized)
+                if (Cef.IsInitialized != true)
                 {
                     Cef.Initialize(settings);
                     _isInitialized = true;
@@ -80,7 +85,7 @@ namespace WindowsFormsApp3.Utils
         {
             try
             {
-                if (_isInitialized && Cef.IsInitialized)
+                if (_isInitialized && Cef.IsInitialized == true)
                 {
                     Cef.Shutdown();
                     _isInitialized = false;

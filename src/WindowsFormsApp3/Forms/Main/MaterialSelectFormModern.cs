@@ -6124,84 +6124,7 @@ namespace WindowsFormsApp3
             }
         }
 
-        /// <summary>
-        /// 上一页按钮
-        /// </summary>
-        private void TabButtonPrevious_Click(object sender, EventArgs e)
-        {
-            PdfPreview?.PreviousPage();
-            // ✅ 更新页码显示
-            UpdatePageInfoDisplay();
-        }
 
-        /// <summary>
-        /// 下一页按钮
-        /// </summary>
-        private void TabButtonNext_Click(object sender, EventArgs e)
-        {
-            PdfPreview?.NextPage();
-            // ✅ 更新页码显示
-            UpdatePageInfoDisplay();
-        }
-
-  
-        /// <summary>
-        /// 刷新按銵
-        /// </summary>
-        private async void TabButtonRefresh_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                if (!string.IsNullOrEmpty(_cachedPdfPath) && File.Exists(_cachedPdfPath))
-                {
-                    // 清除缓存，强制重新加载
-                    PdfPreview?.ClearCache();
-                    bool success = await PdfPreview.LoadPdfAsync(_cachedPdfPath);
-                    LogHelper.Debug($"[PDF 预覧] 刷新了 PDF: {_cachedPdfPath}, 结果: {success}");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PDF 预覧] 刷新失败: {ex.Message}");
-            }
-        }
-        
-  
-        /// <summary>
-        /// 更新页码显示标签
-        /// </summary>
-        private void UpdatePageInfoDisplay()
-        {
-            try
-            {
-                if (pdfPreviewControl == null)
-                {
-                    return;
-                }
-
-                int currentPage = PdfPreview?.CurrentPageIndex ?? 0 + 1;  // 转换为以 1 开头的页码
-                int totalPages = PdfPreview?.PageCount ?? 0;
-                
-                // ✅ 在 UI 线程中更新标签
-                if (pageInfoLabel.InvokeRequired)
-                {
-                    pageInfoLabel.Invoke(new Action(() =>
-                    {
-                        pageInfoLabel.Text = $"{currentPage} / {totalPages}";
-                        LogHelper.Debug($"[PDF 预览] 页码显示更新: {currentPage} / {totalPages}");
-                    }));
-                }
-                else
-                {
-                    pageInfoLabel.Text = $"{currentPage} / {totalPages}";
-                    LogHelper.Debug($"[PDF 预览] 页码显示更新: {currentPage} / {totalPages}");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PDF 预览] 更新页码显示异常: {ex.Message}");
-            }
-        }
 
         /// <summary>
         /// PDF 预览控件页面加载完成事件
@@ -6211,26 +6134,9 @@ namespace WindowsFormsApp3
         {
             try
             {
-                // 扨日需要在 UI 线程中执行
-                if (pageInfoLabel.InvokeRequired)
-                {
-                    pageInfoLabel.Invoke(new Action(() =>
-                    {
-                        pageInfoLabel.Text = $"{e.PageIndex + 1} / {e.PageCount}";
-                        // ✅ 应用默认的最优适应缩放
-                        PdfPreview?.ApplyBestFit();
-                        LogHelper.Debug("[PDF 预览] 页面加载完成，应用默认最优适应缩放");
-                    }));
-                }
-                else
-                {
-                    pageInfoLabel.Text = $"{e.PageIndex + 1} / {e.PageCount}";
-                    // ✅ 应用默认的最优适应缩放
-                    PdfPreview?.ApplyBestFit();
-                    LogHelper.Debug("[PDF 预览] 页面加载完成，应用默认最优适应缩放");
-                }
-
-                LogHelper.Debug($"[PDF 预览] 页码显示更新: {e.PageIndex + 1} / {e.PageCount}");
+                // ✅ 应用默认的最优适应缩放
+                PdfPreview?.ApplyBestFit();
+                LogHelper.Debug($"[PDF 预览] 页面加载完成，应用默认最优适应缩放 (页码: {e.PageIndex + 1} / {e.PageCount})");
             }
             catch (Exception ex)
             {
@@ -6528,7 +6434,6 @@ namespace WindowsFormsApp3
             try
             {
                 LogHelper.Debug("[PDF 预览] 真实PDF控件页面加载完成");
-                UpdatePageInfoDisplay();
             }
             catch (Exception ex)
             {

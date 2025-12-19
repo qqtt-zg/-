@@ -9,14 +9,14 @@ namespace WindowsFormsApp3.Controls
 {
     /// <summary>
     /// PDF预览控件包装器
-    /// 内部使用CefSharpPdfPreviewControl实现PDF预览功能
+    /// 内部使用PdfiumPdfPreviewControl实现PDF预览功能
     /// 保持向后兼容的公共API
     /// </summary>
     public class PdfPreviewControl : Panel
     {
         #region 私有字段
 
-        private CefSharpPdfPreviewControl _cefControl;
+        private PdfiumPdfPreviewControl _pdfiumControl;
         private bool _isLoading = false;
         private readonly bool _isDesignMode;
 
@@ -29,12 +29,12 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public int CurrentPageIndex
         {
-            get => _cefControl?.CurrentPage - 1 ?? 0;
+            get => _pdfiumControl?.CurrentPage - 1 ?? 0;
             set
             {
-                if (_cefControl != null && value >= 0)
+                if (_pdfiumControl != null && value >= 0)
                 {
-                    _ = _cefControl.GoToPage(value + 1);
+                    _pdfiumControl.CurrentPage = value + 1;
                 }
             }
         }
@@ -42,18 +42,20 @@ namespace WindowsFormsApp3.Controls
         /// <summary>
         /// PDF 文档总页数
         /// </summary>
-        public int PageCount => _cefControl?.TotalPages ?? 0;
+        public int PageCount => _pdfiumControl?.PageCount ?? 0;
 
         /// <summary>
-        /// 当前缩放百分比（CefSharp自动管理，此处仅用于兼容）
+        /// 当前缩放百分比
         /// </summary>
         public float CurrentZoom
         {
-            get => 100f; // CefSharp内部管理缩放
+            get => (float)(_pdfiumControl?.Zoom * 100 ?? 100f);
             set
             {
-                // CefSharp通过JavaScript控制缩放，此处保留接口兼容性
-                // 可以通过JavaScript注入实现，但通常使用原生缩放功能
+                if (_pdfiumControl != null)
+                {
+                    _pdfiumControl.Zoom = value / 100.0;
+                }
             }
         }
 
@@ -98,7 +100,7 @@ namespace WindowsFormsApp3.Controls
             this.Padding = new Padding(0);
             this.DoubleBuffered = true;
 
-            // 在设计器模式下，显示占位符而不创建CefSharp控件
+            // 在设计器模式下，显示占位符
             if (_isDesignMode)
             {
                 CreateDesignTimePlaceholder();
@@ -107,25 +109,19 @@ namespace WindowsFormsApp3.Controls
 
             try
             {
-                // 确保CefSharp已初始化
-                if (!CefSharpInitializer.IsInitialized)
-                {
-                    CefSharpInitializer.Initialize();
-                }
-
-                // 创建CefSharp PDF预览控件
-                _cefControl = new CefSharpPdfPreviewControl
+                // 创建Pdfium PDF预览控件
+                _pdfiumControl = new PdfiumPdfPreviewControl
                 {
                     Dock = DockStyle.Fill
                 };
 
                 // 绑定事件
-                _cefControl.PageChanged += CefControl_PageChanged;
-                _cefControl.PageLoaded += CefControl_PageLoaded;
-                _cefControl.LoadError += CefControl_LoadError;
+                _pdfiumControl.PageChanged += PdfiumControl_PageChanged;
+                _pdfiumControl.PageLoaded += PdfiumControl_PageLoaded;
+                _pdfiumControl.LoadError += PdfiumControl_LoadError;
 
-                this.Controls.Add(_cefControl);
-                LogHelper.Debug("[PdfPreviewControl] CefSharp PDF预览控件初始化完成");
+                this.Controls.Add(_pdfiumControl);
+                LogHelper.Debug("[PdfPreviewControl] PdfiumViewer PDF预览控件初始化完成");
             }
             catch (Exception ex)
             {
@@ -157,7 +153,7 @@ namespace WindowsFormsApp3.Controls
 
             var label = new Label
             {
-                Text = "PDF预览控件\n(CefSharp - 设计时模式)",
+                Text = "PDF预览控件\n(PdfiumViewer - 设计时模式)",
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter,
                 ForeColor = Color.FromArgb(100, 100, 100),
@@ -173,19 +169,18 @@ namespace WindowsFormsApp3.Controls
 
         #region 事件处理
 
-        private void CefControl_PageChanged(object sender, EventArgs e)
+        private void PdfiumControl_PageChanged(object sender, EventArgs e)
         {
             // 页面变化时可以触发相关事件
-            // 这里暂时不需要特殊处理
         }
 
-        private void CefControl_PageLoaded(object sender, EventArgs e)
+        private void PdfiumControl_PageLoaded(object sender, EventArgs e)
         {
             _isLoading = false;
             OnPageLoaded(CurrentPageIndex, PageCount);
         }
 
-        private void CefControl_LoadError(object sender, string error)
+        private void PdfiumControl_LoadError(object sender, string error)
         {
             _isLoading = false;
             OnLoadError(new Exception(error));
@@ -217,13 +212,12 @@ namespace WindowsFormsApp3.Controls
                 _isLoading = true;
                 LogHelper.Debug($"[PdfPreviewControl] 开始加载PDF: {filePath}");
 
-                if (_cefControl != null)
+                if (_pdfiumControl != null)
                 {
-                    bool success = _cefControl.LoadPdf(filePath);
+                    bool success = await _pdfiumControl.LoadPdfAsync(filePath);
                     if (success)
                     {
                         LogHelper.Debug("[PdfPreviewControl] PDF加载成功");
-                        // PageLoaded事件将在CefSharp控件内部触发
                         return true;
                     }
                     else
@@ -235,7 +229,7 @@ namespace WindowsFormsApp3.Controls
                 }
                 else
                 {
-                    LogHelper.Error("[PdfPreviewControl] CefSharp控件未初始化");
+                    LogHelper.Error("[PdfPreviewControl] Pdfium控件未初始化");
                     OnLoadError(new Exception("PDF预览组件未初始化"));
                     return false;
                 }
@@ -257,9 +251,9 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void GoToPage(int pageIndex)
         {
-            if (_cefControl != null && pageIndex >= 0)
+            if (_pdfiumControl != null && pageIndex >= 0)
             {
-                _ = _cefControl.GoToPage(pageIndex + 1);
+                _pdfiumControl.CurrentPage = pageIndex + 1;
             }
         }
 
@@ -268,7 +262,7 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void NextPage()
         {
-            _cefControl?.NextPage();
+            _pdfiumControl?.NextPage();
         }
 
         /// <summary>
@@ -276,7 +270,7 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void PreviousPage()
         {
-            _cefControl?.PreviousPage();
+            _pdfiumControl?.PreviousPage();
         }
 
         /// <summary>
@@ -284,7 +278,10 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void FirstPage()
         {
-            _cefControl?.FirstPage();
+            if (_pdfiumControl != null)
+            {
+                _pdfiumControl.CurrentPage = 1;
+            }
         }
 
         /// <summary>
@@ -292,130 +289,119 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         public void LastPage()
         {
-            _cefControl?.LastPage();
+            if (_pdfiumControl != null)
+            {
+                _pdfiumControl.CurrentPage = PageCount;
+            }
         }
 
         /// <summary>
-        /// 放大（由CefSharp原生处理，此处仅保持兼容）
+        /// 放大
         /// </summary>
         public void ZoomIn()
         {
-            // CefSharp使用原生缩放功能
-            // 可以通过JavaScript注入实现，但通常不需要
-            LogHelper.Debug("[PdfPreviewControl] 缩放功能由CefSharp原生提供");
+            _pdfiumControl?.ZoomIn();
         }
 
         /// <summary>
-        /// 缩小（由CefSharp原生处理，此处仅保持兼容）
+        /// 缩小
         /// </summary>
         public void ZoomOut()
         {
-            // CefSharp使用原生缩放功能
-            LogHelper.Debug("[PdfPreviewControl] 缩放功能由CefSharp原生提供");
+            _pdfiumControl?.ZoomOut();
         }
 
         /// <summary>
-        /// 清除缓存
+        /// 设置缩放百分比
         /// </summary>
-        public void ClearCache()
+        public void SetZoom(float zoomPercent)
         {
-            try
+            if (_pdfiumControl != null)
             {
-                // 清理CefSharp缓存
-                CefSharpInitializer.ClearCache();
-                LogHelper.Debug("[PdfPreviewControl] 缓存已清除");
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error($"[PdfPreviewControl] 清除缓存异常: {ex.Message}");
+                _pdfiumControl.Zoom = zoomPercent / 100.0;
             }
         }
 
         /// <summary>
-        /// 计算适应页面宽度的缩放百分比（保持兼容，但实际由CefSharp处理）
+        /// 适应宽度
         /// </summary>
-        public float CalculateFitToWidthZoom()
+        public void FitWidth()
         {
-            // CefSharp自动处理适应页面
-            return 100f;
+            _pdfiumControl?.FitWidth();
         }
 
         /// <summary>
-        /// 计算适应页面高度的缩放百分比（保持兼容，但实际由CefSharp处理）
+        /// 适应页面
         /// </summary>
-        public float CalculateFitToHeightZoom()
+        public void FitPage()
         {
-            // CefSharp自动处理适应页面
-            return 100f;
+            _pdfiumControl?.FitPage();
         }
 
         /// <summary>
-        /// 计算自动最优适应的缩放百分比（保持兼容，但实际由CefSharp处理）
+        /// 显示/隐藏工具栏
         /// </summary>
-        public float CalculateBestFitZoom()
+        public void ToggleToolbar()
         {
-            // CefSharp默认使用page-fit模式
-            return 100f;
+            _pdfiumControl?.ToggleToolbar();
         }
 
         /// <summary>
-        /// 应用自动最优适应缩放（保持兼容，但实际由CefSharp处理）
+        /// 显示/隐藏边栏
+        /// </summary>
+        public void ToggleSidebar()
+        {
+            _pdfiumControl?.ToggleBookmarks();
+        }
+
+        /// <summary>
+        /// 关闭当前PDF
+        /// </summary>
+        public void ClosePdf()
+        {
+            _pdfiumControl?.ClosePdf();
+        }
+
+        /// <summary>
+        /// 应用最佳适应缩放
         /// </summary>
         public void ApplyBestFit()
         {
-            // CefSharp已在初始化时设置为page-fit模式
-            LogHelper.Debug("[PdfPreviewControl] CefSharp已设置为适应页面模式");
+            _pdfiumControl?.FitWidth();
         }
 
         /// <summary>
-        /// 刷新当前页面
+        /// 刷新显示
         /// </summary>
         public new void Refresh()
         {
-            _cefControl?.Refresh();
+            _pdfiumControl?.Refresh();
+            base.Refresh();
         }
 
         #endregion
 
-        #region 事件重写
-
-        /// <summary>
-        /// 控件大小改变时的事件处理
-        /// CefSharp会自动处理调整大小
-        /// </summary>
-        protected override void OnResize(EventArgs e)
-        {
-            base.OnResize(e);
-            // CefSharp自动处理页面适应，无需额外操作
-        }
-
-        #endregion
-
-        #region 事件触发
+        #region 受保护方法
 
         protected virtual void OnPageLoaded(int pageIndex, int pageCount)
         {
-            PageLoaded?.Invoke(this, new PageLoadedEventArgs { PageIndex = pageIndex, PageCount = pageCount });
+            PageLoaded?.Invoke(this, new PageLoadedEventArgs(pageIndex, pageCount));
         }
 
-        protected virtual void OnLoadError(Exception exception)
+        protected virtual void OnLoadError(Exception ex)
         {
-            LoadError?.Invoke(this, new ErrorEventArgs(exception));
+            LoadError?.Invoke(this, new ErrorEventArgs(ex));
         }
 
         #endregion
 
-        #region 资源释放
+        #region 清理资源
 
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
-                try
-                {
-                    _cefControl?.Dispose();
-                }
-                catch { }
+                _pdfiumControl?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -426,12 +412,31 @@ namespace WindowsFormsApp3.Controls
     #region 事件参数类
 
     /// <summary>
-    /// 页面加载完成事件参数
+    /// 页面加载事件参数
     /// </summary>
     public class PageLoadedEventArgs : EventArgs
     {
-        public int PageIndex { get; set; }
-        public int PageCount { get; set; }
+        public int PageIndex { get; }
+        public int PageCount { get; }
+
+        public PageLoadedEventArgs(int pageIndex, int pageCount)
+        {
+            PageIndex = pageIndex;
+            PageCount = pageCount;
+        }
+    }
+
+    /// <summary>
+    /// 错误事件参数
+    /// </summary>
+    public class ErrorEventArgs : EventArgs
+    {
+        public Exception Exception { get; }
+
+        public ErrorEventArgs(Exception exception)
+        {
+            Exception = exception;
+        }
     }
 
     #endregion

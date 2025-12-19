@@ -35,7 +35,7 @@ namespace WindowsFormsApp3
         private void InitializeComponent()
         {
             this.components = new System.ComponentModel.Container();
-            AntdUI.Tabs.StyleLine styleLine2 = new AntdUI.Tabs.StyleLine();
+            AntdUI.Tabs.StyleLine styleLine1 = new AntdUI.Tabs.StyleLine();
             this.orderNumberLabel = new AntdUI.Label();
             this.orderNumberTextBox = new AntdUI.Input();
             this.autoIncrementCheckbox = new AntdUI.Checkbox();
@@ -96,18 +96,12 @@ namespace WindowsFormsApp3
             this.duplicateLayoutCheckbox = new AntdUI.Checkbox();
             this.previewCollapseButton = new AntdUI.Button();
             this.pdfPreviewPanel = new System.Windows.Forms.Panel();
-            this.previewControlBar = new System.Windows.Forms.Panel();
-            this.tabButtonPrevious = new AntdUI.Button();
-            this.tabButtonNext = new AntdUI.Button();
-            this.pageInfoLabel = new System.Windows.Forms.Label();
-            this.tabButtonRefresh = new AntdUI.Button();
             this.pdfPreviewControl = new System.Windows.Forms.Panel();
             this.tabs1.SuspendLayout();
             this.tabPage3.SuspendLayout();
             this.materialTypeGroupBox.SuspendLayout();
             this.layoutModeGroupBox.SuspendLayout();
             this.pdfPreviewPanel.SuspendLayout();
-            this.previewControlBar.SuspendLayout();
             this.SuspendLayout();
             // 
             // orderNumberLabel
@@ -389,7 +383,7 @@ namespace WindowsFormsApp3
             this.tabs1.Pages.Add(this.tabPage3);
             this.tabs1.Pages.Add(this.tabPage2);
             this.tabs1.Size = new System.Drawing.Size(400, 183);
-            this.tabs1.Style = styleLine2;
+            this.tabs1.Style = styleLine1;
             this.tabs1.TabIndex = 1;
             this.tabs1.Text = "tabs1";
             // 
@@ -414,7 +408,6 @@ namespace WindowsFormsApp3
             this.tabPage3.Dock = System.Windows.Forms.DockStyle.Fill;
             this.tabPage3.Location = new System.Drawing.Point(0, 24);
             this.tabPage3.Name = "tabPage3";
-            this.tabPage3.Showed = true;
             this.tabPage3.Size = new System.Drawing.Size(400, 159);
             this.tabPage3.TabIndex = 1;
             this.tabPage3.Text = "不干胶";
@@ -806,82 +799,19 @@ namespace WindowsFormsApp3
             // 
             this.pdfPreviewPanel.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(240)))), ((int)(((byte)(240)))), ((int)(((byte)(240)))));
             this.pdfPreviewPanel.Controls.Add(this.pdfPreviewControl);
-            this.pdfPreviewPanel.Controls.Add(this.previewControlBar);
             this.pdfPreviewPanel.Location = new System.Drawing.Point(0, 614);
             this.pdfPreviewPanel.Name = "pdfPreviewPanel";
             this.pdfPreviewPanel.Size = new System.Drawing.Size(400, 245);
             this.pdfPreviewPanel.TabIndex = 61;
-            //
-            // previewControlBar
-            //
-            this.previewControlBar.BackColor = System.Drawing.Color.White;
-            this.previewControlBar.Controls.Add(this.tabButtonPrevious);
-            this.previewControlBar.Controls.Add(this.tabButtonNext);
-            this.previewControlBar.Controls.Add(this.pageInfoLabel);
-            this.previewControlBar.Controls.Add(this.tabButtonRefresh);
-            this.previewControlBar.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this.previewControlBar.Location = new System.Drawing.Point(0, 213);
-            this.previewControlBar.Name = "previewControlBar";
-            this.previewControlBar.Size = new System.Drawing.Size(400, 32);
-            this.previewControlBar.TabIndex = 1;
-            //
-            // tabButtonPrevious
-            //
-            this.tabButtonPrevious.BorderWidth = 1F;
-            this.tabButtonPrevious.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonPrevious.Ghost = true;
-            this.tabButtonPrevious.Location = new System.Drawing.Point(10, 4);
-            this.tabButtonPrevious.Name = "tabButtonPrevious";
-            this.tabButtonPrevious.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonPrevious.TabIndex = 0;
-            this.tabButtonPrevious.Text = "<";
-            this.tabButtonPrevious.WaveSize = 0;
-            this.tabButtonPrevious.Click += new System.EventHandler(this.TabButtonPrevious_Click);
-            //
-            // tabButtonNext
-            //
-            this.tabButtonNext.BorderWidth = 1F;
-            this.tabButtonNext.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonNext.Ghost = true;
-            this.tabButtonNext.Location = new System.Drawing.Point(50, 4);
-            this.tabButtonNext.Name = "tabButtonNext";
-            this.tabButtonNext.Size = new System.Drawing.Size(30, 24);
-            this.tabButtonNext.TabIndex = 1;
-            this.tabButtonNext.Text = ">";
-            this.tabButtonNext.WaveSize = 0;
-            this.tabButtonNext.Click += new System.EventHandler(this.TabButtonNext_Click);
-              //
-            // pageInfoLabel
-            //
-            this.pageInfoLabel.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.pageInfoLabel.Location = new System.Drawing.Point(95, 8);
-            this.pageInfoLabel.Name = "pageInfoLabel";
-            this.pageInfoLabel.Size = new System.Drawing.Size(58, 16);
-            this.pageInfoLabel.TabIndex = 7;
-            this.pageInfoLabel.Text = "0 / 0";
-            this.pageInfoLabel.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            //
-            // tabButtonRefresh
-            //
-            this.tabButtonRefresh.BorderWidth = 1F;
-            this.tabButtonRefresh.Font = new System.Drawing.Font("Microsoft YaHei UI", 8F);
-            this.tabButtonRefresh.Ghost = true;
-            this.tabButtonRefresh.Location = new System.Drawing.Point(330, 4);
-            this.tabButtonRefresh.Name = "tabButtonRefresh";
-            this.tabButtonRefresh.Size = new System.Drawing.Size(60, 24);
-            this.tabButtonRefresh.TabIndex = 9;
-            this.tabButtonRefresh.Text = "刷新";
-            this.tabButtonRefresh.WaveSize = 0;
-            this.tabButtonRefresh.Click += new System.EventHandler(this.TabButtonRefresh_Click);
             // 
             // pdfPreviewControl
-            //
+            // 
             this.pdfPreviewControl.BackColor = System.Drawing.Color.White;
             this.pdfPreviewControl.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pdfPreviewControl.Location = new System.Drawing.Point(0, 0);
             this.pdfPreviewControl.Margin = new System.Windows.Forms.Padding(0);
             this.pdfPreviewControl.Name = "pdfPreviewControl";
-            this.pdfPreviewControl.Size = new System.Drawing.Size(400, 213);
+            this.pdfPreviewControl.Size = new System.Drawing.Size(400, 245);
             this.pdfPreviewControl.TabIndex = 0;
             // 
             // MaterialSelectFormModern
@@ -940,7 +870,6 @@ namespace WindowsFormsApp3
             this.materialTypeGroupBox.ResumeLayout(false);
             this.layoutModeGroupBox.ResumeLayout(false);
             this.pdfPreviewPanel.ResumeLayout(false);
-            this.previewControlBar.ResumeLayout(false);
             this.ResumeLayout(false);
 
         }
@@ -1021,10 +950,5 @@ namespace WindowsFormsApp3
         private AntdUI.Button previewCollapseButton;
         private System.Windows.Forms.Panel pdfPreviewPanel;
         private System.Windows.Forms.Panel pdfPreviewControl;
-        private System.Windows.Forms.Panel previewControlBar;
-        private AntdUI.Button tabButtonPrevious;
-        private AntdUI.Button tabButtonNext;
-        private System.Windows.Forms.Label pageInfoLabel;
-        private AntdUI.Button tabButtonRefresh;
     }
 }

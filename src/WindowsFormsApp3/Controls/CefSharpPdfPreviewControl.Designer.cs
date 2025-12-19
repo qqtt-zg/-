@@ -19,6 +19,7 @@ namespace WindowsFormsApp3.Controls
             this.Name = "CefSharpPdfPreviewControl";
             this.Size = new System.Drawing.Size(800, 600);
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 

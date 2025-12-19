@@ -290,6 +290,7 @@ namespace WindowsFormsApp3.Controls
                 _totalPages = 0;
 
                 // 加载本地PDF文件
+                // 使用鼠标滚轮可缩放，Ctrl+滚轮可快速缩放
                 _browser.Load(filePath);
                 return true;
             }
@@ -397,6 +398,82 @@ namespace WindowsFormsApp3.Controls
         }
 
         /// <summary>
+        /// 切换边栏显示状态
+        /// </summary>
+        public async Task ToggleSidebar()
+        {
+            try
+            {
+                // Chrome PDF Viewer使用特定的工具栏按钮
+                var script = @"
+                    (function() {
+                        try {
+                            // 方法1: 尝试点击侧边栏切换按钮 (Chrome PDF Viewer)
+                            var sidenavBtn = document.querySelector('viewer-sidenav-toggle, #sidenavToggle, [id*=""sidenav""], button[aria-label*=""sidenav""], button[aria-label*=""Sidenav""]');
+                            if (sidenavBtn) {
+                                sidenavBtn.click();
+                                return 'sidenav button clicked';
+                            }
+                            
+                            // 方法2: 尝试查找pdf-viewer shadow DOM
+                            var pdfViewer = document.querySelector('pdf-viewer');
+                            if (pdfViewer && pdfViewer.shadowRoot) {
+                                var shadowBtn = pdfViewer.shadowRoot.querySelector('viewer-sidenav-toggle, #sidenavToggle');
+                                if (shadowBtn) {
+                                    shadowBtn.click();
+                                    return 'shadow sidenav clicked';
+                                }
+                            }
+                            
+                            // 方法3: 模拟键盘快捷键 Ctrl+Shift+P (某些版本)
+                            return 'no sidenav found';
+                        } catch (e) {
+                            return 'error: ' + e.message;
+                        }
+                    })();
+                ";
+
+                var result = await _browser.EvaluateScriptAsync(script);
+                System.Diagnostics.Debug.WriteLine($"ToggleSidebar result: {result.Result}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"切换边栏失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 设置为适应页面缩放
+        /// </summary>
+        public async Task FitToPage()
+        {
+            try
+            {
+                var script = @"
+                    (function() {
+                        try {
+                            var viewer = document.querySelector('pdf-viewer');
+                            if (viewer) {
+                                viewer.currentScaleValue = 'page-fit';
+                                return true;
+                            }
+                            return false;
+                        } catch (e) {
+                            console.error('Fit to page failed:', e);
+                            return false;
+                        }
+                    })();
+                ";
+
+                await _browser.EvaluateScriptAsync(script);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"适应页面失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// 清理资源
         /// </summary>
         protected override void Dispose(bool disposing)
@@ -410,19 +487,117 @@ namespace WindowsFormsApp3.Controls
     }
 
     /// <summary>
-    /// 自定义菜单处理器，禁用右键菜单
+    /// 自定义菜单处理器，添加PDF控制菜单项
     /// </summary>
     public class CustomMenuHandler : IContextMenuHandler
     {
+        // 自定义菜单命令ID
+        private const CefMenuCommand MenuToggleSidebar = (CefMenuCommand)26501;
+        private const CefMenuCommand MenuFitToPage = (CefMenuCommand)26502;
+        
+        private readonly CefSharpPdfPreviewControl _pdfControl;
+        
+        public CustomMenuHandler()
+        {
+            _pdfControl = null;
+        }
+        
+        public CustomMenuHandler(CefSharpPdfPreviewControl pdfControl)
+        {
+            _pdfControl = pdfControl;
+        }
+
         public void OnBeforeContextMenu(IWebBrowser browserControl, IBrowser browser, IFrame frame, IContextMenuParams parameters, IMenuModel model)
         {
-            // 清除所有菜单项
+            // 清除默认菜单项
             model.Clear();
+            
+            // 添加操作提示（仅显示，无实际功能）
+            model.AddItem(MenuToggleSidebar, "提示: 滚轮缩放 | Ctrl+滚轮快速缩放");
+            model.AddItem(MenuFitToPage, "提示: 拖拽可移动视图");
         }
 
         public bool OnContextMenuCommand(IWebBrowser browserControl, IBrowser browser, IFrame frame, IContextMenuParams parameters, CefMenuCommand commandId, CefEventFlags eventFlags)
         {
-            return false;
+            // 菜单项仅作为提示，无实际操作
+            return true;
+        }
+        
+        private async Task ExecuteToggleSidebar(IFrame frame)
+        {
+            try
+            {
+                // Chrome PDF Viewer 使用键盘快捷键 Ctrl+Shift+S 或直接调用viewer API
+                var script = @"
+                    (function() {
+                        try {
+                            // 方法1: 尝试查找embed元素并发送postMessage
+                            var embed = document.querySelector('embed[type=""application/pdf""]');
+                            if (embed) {
+                                embed.postMessage({type: 'toggleBookmarks'});
+                                return 'postMessage sent';
+                            }
+                            
+                            // 方法2: 模拟键盘快捷键
+                            var event = new KeyboardEvent('keydown', {
+                                key: 's',
+                                code: 'KeyS',
+                                ctrlKey: true,
+                                shiftKey: true,
+                                bubbles: true
+                            });
+                            document.dispatchEvent(event);
+                            return 'keyboard event sent';
+                        } catch (e) {
+                            return 'error: ' + e.message;
+                        }
+                    })();
+                ";
+                var result = await frame.EvaluateScriptAsync(script);
+                System.Diagnostics.Debug.WriteLine($"ToggleSidebar result: {result.Result}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"切换边栏失败: {ex.Message}");
+            }
+        }
+        
+        private async Task ExecuteFitToPage(IFrame frame)
+        {
+            try
+            {
+                // Chrome PDF Viewer 使用键盘快捷键或postMessage
+                var script = @"
+                    (function() {
+                        try {
+                            // 方法1: 尝试查找embed元素并发送postMessage
+                            var embed = document.querySelector('embed[type=""application/pdf""]');
+                            if (embed) {
+                                embed.postMessage({type: 'setZoom', zoom: 'fit-to-page'});
+                                return 'postMessage sent';
+                            }
+                            
+                            // 方法2: 模拟键盘快捷键 Ctrl+0 (适应页面)
+                            var event = new KeyboardEvent('keydown', {
+                                key: '0',
+                                code: 'Digit0',
+                                ctrlKey: true,
+                                bubbles: true
+                            });
+                            document.dispatchEvent(event);
+                            return 'keyboard event sent';
+                        } catch (e) {
+                            return 'error: ' + e.message;
+                        }
+                    })();
+                ";
+                var result = await frame.EvaluateScriptAsync(script);
+                System.Diagnostics.Debug.WriteLine($"FitToPage result: {result.Result}");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"适应页面失败: {ex.Message}");
+            }
         }
 
         public void OnContextMenuDismissed(IWebBrowser browserControl, IBrowser browser, IFrame frame)
