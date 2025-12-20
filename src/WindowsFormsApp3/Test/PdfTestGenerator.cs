@@ -53,13 +53,13 @@ namespace WindowsFormsApp3.Test
 
                         // 添加内容
                         var content = new Paragraph($"这是第{page}页的内容。\n\n" +
-                            $"本PDF文件用于测试CefSharp PDF预览功能。\n" +
+                            $"本PDF文件用于测试PDF预览功能。\n" +
                             $"创建时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}\n\n" +
                             $"功能测试要点：\n" +
                             $"1. 单页模式显示\n" +
                             $"2. 适应页面缩放\n" +
                             $"3. 页面导航功能\n" +
-                            $"4. CefSharp渲染质量")
+                            $"4. PDF渲染质量")
                             .SetFontSize(14)
                             .SetMarginBottom(20);
                         document.Add(content);

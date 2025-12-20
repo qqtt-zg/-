@@ -2724,16 +2724,6 @@ namespace WindowsFormsApp3
         {
             LogHelper.Debug("MaterialSelectFormModern_Load事件被触发");
 
-            // 注意：CefSharp初始化已移至Program.cs，在应用程序启动时统一处理
-            if (!CefSharpInitializer.IsInitialized)
-            {
-                LogHelper.Warn("[CefSharp] 警告：CefSharp未在应用程序启动时初始化，这可能导致PDF预览功能异常");
-            }
-            else
-            {
-                LogHelper.Debug("[CefSharp] 窗体加载，CefSharp已正确初始化");
-            }
-
             // 使用API设置窗口透明度，确保文字不透明
             if (_opacityValue < 1.0)
             {
@@ -2960,7 +2950,6 @@ namespace WindowsFormsApp3
                 LogHelper.Error($"[MaterialSelectFormModern] 保存窗口位置失败: {ex.Message}", ex);
             }
 
-            // 注意：CefSharp资源管理已移至Program.cs，不在窗体级别处理
             LogHelper.Debug("[MaterialSelectFormModern] 窗体关闭完成");
         }
 

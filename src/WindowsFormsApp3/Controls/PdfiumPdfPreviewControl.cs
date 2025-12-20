@@ -118,6 +118,34 @@ namespace WindowsFormsApp3.Controls
             // 拦截键盘事件实现精确翻页（而非滚动）
             _pdfViewer.Renderer.PreviewKeyDown += Renderer_PreviewKeyDown;
             _pdfViewer.Renderer.KeyDown += Renderer_KeyDown;
+            
+            // 控件大小变化时重新应用最佳适应模式（延迟调用确保尺寸更新完成）
+            this.SizeChanged += (s, e) =>
+            {
+                if (_pdfDocument != null && this.IsHandleCreated)
+                {
+                    this.BeginInvoke(new Action(() => ApplyBestFitZoom()));
+                }
+            };
+            
+            // 控件变为可见时刷新（与折叠展开使用相同机制）
+            this.VisibleChanged += (s, e) =>
+            {
+                if (this.Visible && _pdfDocument != null && this.IsHandleCreated)
+                {
+                    this.BeginInvoke(new Action(() =>
+                    {
+                        ApplyBestFitZoom();
+                        _pdfViewer.Refresh();
+                    }));
+                }
+            };
+            
+            // 创建右键菜单
+            var contextMenu = new ContextMenuStrip();
+            contextMenu.Items.Add("适应宽度", null, (s, e) => FitWidth());
+            contextMenu.Items.Add("适应高度", null, (s, e) => FitPage());
+            _pdfViewer.Renderer.ContextMenuStrip = contextMenu;
 
             this.Controls.Add(_pdfViewer);
             this.BackColor = Color.White;
@@ -155,11 +183,29 @@ namespace WindowsFormsApp3.Controls
                 _pdfDocument = PdfDocument.Load(filePath);
                 _pdfViewer.Document = _pdfDocument;
                 
-                // 强制刷新控件确保初始显示
-                _pdfViewer.Refresh();
-                
                 // 手动应用最佳适应（根据页面宽高比选择）
                 ApplyBestFitZoom();
+                
+                // 使用两次延迟刷新确保可靠显示（第一次100ms，第二次300ms）
+                var timer1 = new System.Windows.Forms.Timer { Interval = 100 };
+                timer1.Tick += (s, args) =>
+                {
+                    timer1.Stop();
+                    timer1.Dispose();
+                    ApplyBestFitZoom();
+                    _pdfViewer.Refresh();
+                };
+                timer1.Start();
+                
+                var timer2 = new System.Windows.Forms.Timer { Interval = 300 };
+                timer2.Tick += (s, args) =>
+                {
+                    timer2.Stop();
+                    timer2.Dispose();
+                    ApplyBestFitZoom();
+                    _pdfViewer.Refresh();
+                };
+                timer2.Start();
 
                 // 触发页面加载事件
                 PageLoaded?.Invoke(this, EventArgs.Empty);
@@ -204,10 +250,17 @@ namespace WindowsFormsApp3.Controls
                 if (pageAspect > viewerAspect)
                 {
                     _pdfViewer.ZoomMode = PdfViewerZoomMode.FitWidth;
+                    // 宽度适应模式下，页面高度会超出视口，需要添加底部Padding
+                    // 这样最后一页才能滚动到视口顶部
+                    int bottomPadding = (int)viewerHeight - 50; // 留出足够空间让末页可以滚动到顶部
+                    if (bottomPadding < 100) bottomPadding = 100;
+                    _pdfViewer.Renderer.Padding = new Padding(0, 0, 0, bottomPadding);
                 }
                 else
                 {
                     _pdfViewer.ZoomMode = PdfViewerZoomMode.FitHeight;
+                    // 高度适应模式下，页面完全显示，不需要额外Padding
+                    _pdfViewer.Renderer.Padding = new Padding(0);
                 }
             }
             catch

@@ -37,7 +37,7 @@ class Program
                     "1. 单页模式显示\n" +
                     "2. 适应页面缩放\n" +
                     "3. 页面导航功能\n" +
-                    "4. CefSharp渲染质量")
+                    "4. PDF渲染质量")
                     .SetFontSize(14)
                     .SetMarginBottom(20);
                 document.Add(content);

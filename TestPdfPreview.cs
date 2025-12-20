@@ -7,7 +7,6 @@ namespace TestPdfPreview
 {
     class TestForm : Form
     {
-        private Button btnInit;
         private Button btnLoadPdf;
         private WindowsFormsApp3.Controls.PdfPreviewControl pdfControl;
         private TextBox txtLog;
@@ -17,17 +16,13 @@ namespace TestPdfPreview
             this.Text = "PDF预览测试";
             this.Size = new System.Drawing.Size(800, 600);
 
-            // 初始化按钮
-            btnInit = new Button { Text = "初始化CefSharp", Top = 10, Left = 10, Width = 150 };
-            btnInit.Click += BtnInit_Click;
-
-            btnLoadPdf = new Button { Text = "加载测试PDF", Top = 50, Left = 10, Width = 150 };
+            btnLoadPdf = new Button { Text = "加载测试PDF", Top = 10, Left = 10, Width = 150 };
             btnLoadPdf.Click += BtnLoadPdf_Click;
 
             // PDF预览控件
             pdfControl = new WindowsFormsApp3.Controls.PdfPreviewControl
             {
-                Top = 100,
+                Top = 60,
                 Left = 10,
                 Width = 760,
                 Height = 400,
@@ -37,7 +32,7 @@ namespace TestPdfPreview
             // 日志文本框
             txtLog = new TextBox
             {
-                Top = 520,
+                Top = 480,
                 Left = 10,
                 Width = 760,
                 Height = 50,
@@ -46,29 +41,7 @@ namespace TestPdfPreview
                 Text = "准备就绪..."
             };
 
-            this.Controls.AddRange(new Control[] { btnInit, btnLoadPdf, pdfControl, txtLog });
-        }
-
-        private void BtnInit_Click(object sender, EventArgs e)
-        {
-            try
-            {
-                txtLog.AppendText("\n开始初始化CefSharp...");
-
-                if (!CefSharpInitializer.IsInitialized)
-                {
-                    CefSharpInitializer.Initialize();
-                    txtLog.AppendText("\nCefSharp初始化成功！");
-                }
-                else
-                {
-                    txtLog.AppendText("\nCefSharp已经初始化");
-                }
-            }
-            catch (Exception ex)
-            {
-                txtLog.AppendText($"\n初始化失败: {ex.Message}");
-            }
+            this.Controls.AddRange(new Control[] { btnLoadPdf, pdfControl, txtLog });
         }
 
         private async void BtnLoadPdf_Click(object sender, EventArgs e)

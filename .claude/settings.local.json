@@ -14,7 +14,8 @@
       "Bash(dotnet nuget locals:*)",
       "Bash(dotnet clean:*)",
       "Bash(dir:*)",
-      "Bash(dotnet:*)"
+      "Bash(dotnet:*)",
+      "Bash(del:*)"
     ]
   }
 }
