@@ -99,20 +99,7 @@ namespace WindowsFormsApp3.Utils
         /// </summary>
         public static bool CanExtractCutPathFromLastPage(string filePath)
         {
-            try
-            {
-                if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return false;
-                using (var reader = new iText.Kernel.Pdf.PdfReader(filePath))
-                using (var doc = new iText.Kernel.Pdf.PdfDocument(reader))
-                {
-                    if (doc.GetNumberOfPages() < 2) return false;
-                    var lastPage = doc.GetPage(doc.GetNumberOfPages());
-                    float[] bounds;
-                    byte[] pathBytes = ExtractAndConvertCutPath(lastPage, doc, out bounds);
-                    return pathBytes != null && pathBytes.Length > 0;
-                }
-            }
-            catch (Exception ex) { LogHelper.Debug("CanExtractCutPathFromLastPage 异常: " + ex.Message); return false; }
+            return Services.PdfCutPathExtractor.CanExtractCutPathFromLastPage(filePath);
         }
 
         public static bool AddDotsAddCounterLayer(string filePath, string finalDimensions, ShapeType shapeType, double roundRadius = 0)
@@ -375,124 +362,12 @@ namespace WindowsFormsApp3.Utils
         /// </summary>
         private static byte[] ExtractAndConvertCutPath(iText.Kernel.Pdf.PdfPage page, iText.Kernel.Pdf.PdfDocument doc, out float[] pageBounds)
         {
-            pageBounds = null;
-            try
-            {
-                iText.Kernel.Pdf.PdfDictionary pageDict = page.GetPdfObject();
-                iText.Kernel.Pdf.PdfObject contents = pageDict.Get(iText.Kernel.Pdf.PdfName.Contents);
-                byte[] contentBytes = null;
-                if (contents is iText.Kernel.Pdf.PdfStream singleStream)
-                    contentBytes = singleStream.GetBytes();
-                else if (contents is iText.Kernel.Pdf.PdfArray arr)
-                {
-                    using (var ms = new System.IO.MemoryStream())
-                    {
-                        for (int j = 0; j < arr.Size(); j++)
-                        {
-                            var obj = arr.Get(j);
-                            iText.Kernel.Pdf.PdfStream cs = obj is iText.Kernel.Pdf.PdfStream s ? s :
-                                (obj is iText.Kernel.Pdf.PdfIndirectReference indRef && indRef.GetRefersTo() is iText.Kernel.Pdf.PdfStream indS) ? indS : null;
-                            if (cs != null) { byte[] csBytes = cs.GetBytes(); ms.Write(csBytes, 0, csBytes.Length); }
-                        }
-                        contentBytes = ms.ToArray();
-                    }
-                }
-                if (contentBytes == null || contentBytes.Length == 0) { LogHelper.Debug("ExtractAndConvertCutPath: 内容流为空"); return null; }
-                string content = System.Text.Encoding.ASCII.GetString(contentBytes);
-                if (!content.Contains(" m\n") && !content.Contains(" m\r") && !content.Contains(" c\n") && !content.Contains(" c\r"))
-                { LogHelper.Debug("ExtractAndConvertCutPath: 无路径操作符"); return null; }
-                string[] contentLines = content.Split(new[] { "\n", "\r\n", "\r" }, StringSplitOptions.None);
-                float cmTx = 0, cmTy = 0; int pathColorLine = -1;
-                for (int li = 0; li < contentLines.Length; li++)
-                {
-                    string line = contentLines[li].Trim();
-                    if (string.IsNullOrEmpty(line)) continue;
-                    if (line.EndsWith(" cm"))
-                    {
-                        string[] parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                        if (parts.Length >= 7)
-                        {
-                            float.TryParse(parts[4], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float e);
-                            float.TryParse(parts[5], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float f);
-                            cmTx += e; cmTy += f;
-                        }
-                    }
-                    // 支持CMYK(K)、RGB(RG)、灰度(G)、CS+SCN(命名颜色空间)等描边颜色操作符
-                    if ((line.EndsWith(" K") || line.EndsWith(" RG") || line.EndsWith(" G") || (line.Contains(" CS") && line.EndsWith(" SCN"))) && pathColorLine < 0)
-                    {
-                        // 在颜色行前后各6行范围内搜索 w 和 m 操作符
-                        // 某些PDF中 w 可能在颜色行之前（如 CS+SCN 模式）
-                        bool hasW = false, hasM = false;
-                        for (int j = Math.Max(0, li - 6); j < Math.Min(li + 6, contentLines.Length); j++)
-                        { string next = contentLines[j].Trim(); if (next.EndsWith(" w")) hasW = true; if (next.EndsWith(" m")) hasM = true; }
-                        if (hasW && hasM) pathColorLine = li;
-                    }
-                }
-                if (pathColorLine < 0) { LogHelper.Debug("ExtractAndConvertCutPath: 未找到颜色(K/RG/G/CS+SCN)+w+m组合"); return null; }
-                string colorLine = "", widthLine = ""; int pathStartLine = -1;
-                for (int li = pathColorLine; li < contentLines.Length; li++)
-                {
-                    string line = contentLines[li].Trim();
-                    if (line.EndsWith(" K") || line.EndsWith(" RG") || line.EndsWith(" G") || (line.Contains(" CS") && line.EndsWith(" SCN"))) { colorLine = line; continue; }
-                    if (line.EndsWith(" w")) { widthLine = line; continue; }
-                    if (line.EndsWith(" m") || line.EndsWith(" c")) { pathStartLine = li; break; }
-                }
-                if (pathStartLine < 0) return null;
-                var pathLineList = new System.Collections.Generic.List<string>();
-                float minX = float.MaxValue, minY = float.MaxValue, maxX = float.MinValue, maxY = float.MinValue;
-                for (int li = pathStartLine; li < contentLines.Length; li++)
-                {
-                    string line = contentLines[li].Trim();
-                    if (string.IsNullOrEmpty(line)) continue;
-                    if (line.EndsWith(" m") || line.EndsWith(" c") || line.EndsWith(" l") || line == "h")
-                    { string converted = ConvertLineCoords(line, cmTx, cmTy); pathLineList.Add(converted); UpdateBounds(converted, ref minX, ref minY, ref maxX, ref maxY); }
-                    else if (line == "S" || line == "s" || line == "f" || line == "f*" || line == "B" || line == "B*")
-                    { pathLineList.Add(line); break; }
-                    else break;
-                }
-                if (pathLineList.Count == 0) return null;
-                pageBounds = new float[] { minX, minY, maxX, maxY };
-                using (var ms = new System.IO.MemoryStream())
-                {
-                    ms.Write(System.Text.Encoding.ASCII.GetBytes("q\n"), 0, 2);
-                    // 统一为标准裁切路径样式：红色描边，线宽0.01pt
-                    byte[] colorBytes = System.Text.Encoding.ASCII.GetBytes("1 0 0 RG\n"); ms.Write(colorBytes, 0, colorBytes.Length);
-                    byte[] widthBytes = System.Text.Encoding.ASCII.GetBytes("0.01 w\n"); ms.Write(widthBytes, 0, widthBytes.Length);
-                    foreach (string pl in pathLineList) { byte[] plBytes = System.Text.Encoding.ASCII.GetBytes(pl + "\n"); ms.Write(plBytes, 0, plBytes.Length); }
-                    ms.Write(System.Text.Encoding.ASCII.GetBytes("Q\n"), 0, 2);
-                    LogHelper.Debug("ExtractAndConvertCutPath: cm偏移=(" + cmTx + "," + cmTy + "), 路径行=" + pathLineList.Count + ", 边界=(" + minX + "," + minY + ")-(" + maxX + "," + maxY + ")");
-                    return ms.ToArray();
-                }
-            }
-            catch (Exception ex) { LogHelper.Debug("ExtractAndConvertCutPath 异常: " + ex.Message); return null; }
+            return Services.PdfCutPathExtractor.ExtractAndConvertCutPath(page, doc, out pageBounds);
         }
 
-        private static string ConvertLineCoords(string line, float cmTx, float cmTy)
-        {
-            string[] parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            string op = parts[parts.Length - 1];
-            if (op == "h") return line;
-            var nums = new System.Collections.Generic.List<string>();
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                if (float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float val))
-                { if (i % 2 == 0) val += cmTx; else val += cmTy; nums.Add(val.ToString(System.Globalization.CultureInfo.InvariantCulture)); }
-                else nums.Add(parts[i]);
-            }
-            return string.Join(" ", nums) + " " + op;
-        }
 
-        private static void UpdateBounds(string line, ref float minX, ref float minY, ref float maxX, ref float maxY)
-        {
-            string[] parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            string op = parts[parts.Length - 1];
-            if (op == "h") return;
-            for (int i = 0; i < parts.Length - 1; i++)
-            {
-                if (float.TryParse(parts[i], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float val))
-                { if (i % 2 == 0) { if (val < minX) minX = val; if (val > maxX) maxX = val; } else { if (val < minY) minY = val; if (val > maxY) maxY = val; } }
-            }
-        }
+
+
 
         /// <returns>是否处理成功</returns>
         public static bool ProcessSpecialShapePdf(string filePath)
