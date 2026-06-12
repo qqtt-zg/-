@@ -120,7 +120,7 @@ namespace WindowsFormsApp3.Forms.Panels
                     statusText += $" | 页面尺寸: {width:F1} × {height:F1} mm";
                 }
             }
-            catch { }
+            catch (Exception) { }
             
             UpdateStatus(statusText);
         }

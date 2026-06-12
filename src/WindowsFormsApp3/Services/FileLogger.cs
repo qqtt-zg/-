@@ -72,6 +72,7 @@ namespace WindowsFormsApp3.Services
                 if (!string.IsNullOrEmpty(logFolderPath))
                 {
                     _logFolderPath = logFolderPath;
+                    _currentLogLevel = Interfaces.LogLevel.Debug; // 指定文件夹时设置为Debug级别
                 }
                 
                 // 确保日志目录存在

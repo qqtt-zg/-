@@ -137,7 +137,7 @@ namespace WindowsFormsApp3.Forms.Utils
                                 exStyle & ~FloatingDropZoneNative.WS_EX_LAYERED);
                         }
                     }
-                    catch { }
+                    catch (Exception) { }
                     
                     // 强制刷新窗口，清除多余内容
                     Invalidate();
@@ -252,7 +252,7 @@ namespace WindowsFormsApp3.Forms.Utils
                                     exStyle & ~FloatingDropZoneNative.WS_EX_LAYERED);
                             }
                         }
-                        catch { }
+                        catch (Exception) { }
                         TransparencyKey = Color.Empty;
                     }
                 }
@@ -1412,7 +1412,7 @@ namespace WindowsFormsApp3.Forms.Utils
                             exStyle & ~FloatingDropZoneNative.WS_EX_LAYERED);
                     }
                 }
-                catch { }
+                catch (Exception) { }
             }
             
             // 设置默认背景色
@@ -1515,7 +1515,7 @@ namespace WindowsFormsApp3.Forms.Utils
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception) { }
 
                     // 如果主题也没有，使用硬编码默认值
                     if (w == 0) w = 180;
@@ -1573,7 +1573,7 @@ namespace WindowsFormsApp3.Forms.Utils
                 AppSettings.SetValue($"{PersistKeyPrefix}.ShowBorder", _showBorder);
                 AppSettings.Save();
             }
-            catch { }
+            catch (Exception) { }
         }
 
         /// <summary>

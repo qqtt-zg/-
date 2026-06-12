@@ -395,7 +395,7 @@ namespace WindowsFormsApp3.Services
                 LogHelper.Info("[CopyPagesWithPattern] 操作已取消");
                 if (File.Exists(outputPdfPath))
                 {
-                    try { File.Delete(outputPdfPath); } catch { }
+                    try { File.Delete(outputPdfPath); } catch (Exception) { }
                 }
                 throw;
             }

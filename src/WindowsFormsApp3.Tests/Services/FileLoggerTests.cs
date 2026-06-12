@@ -134,7 +134,7 @@ namespace WindowsFormsApp3.Tests.Services
 
                 // 验证结果
                 Assert.True(Directory.Exists(newLogFolder));
-                string logFilePath = Path.Combine(newLogFolder, $"{DateTime.Now:yyyy-MM-dd}.log");
+                string logFilePath = Path.Combine(newLogFolder, $"app_{DateTime.Now:yyyy-MM-dd}.log");
                 Assert.True(File.Exists(logFilePath));
             }
             finally
@@ -169,7 +169,7 @@ namespace WindowsFormsApp3.Tests.Services
         private string GetCurrentLogFilePath()
         {
             string dateStr = DateTime.Now.ToString("yyyy-MM-dd");
-            return Path.Combine(_testLogFolder, $"{dateStr}.log");
+            return Path.Combine(_testLogFolder, $"app_{dateStr}.log");
         }
 
         // 清理测试资源

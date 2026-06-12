@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 
 namespace WindowsFormsApp3.Utils
@@ -17,9 +17,10 @@ namespace WindowsFormsApp3.Utils
         {
             get
             {
-                var path = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "大诚重命名工具");
+                var envRoot = Environment.GetEnvironmentVariable("CODEX_APPDATA_ROOT");
+                var path = string.IsNullOrEmpty(envRoot)
+                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "澶ц瘹閲嶅懡鍚嶅伐鍏?")
+                    : envRoot;
                 EnsureDirectoryExists(path);
                 return path;
             }

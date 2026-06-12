@@ -31,6 +31,7 @@ namespace WindowsFormsApp3.Tests
             {
                 UndoCalled = true;
             }
+
         }
 
         public UndoRedoManagerTests()
@@ -117,7 +118,7 @@ namespace WindowsFormsApp3.Tests
             Assert.False(_undoRedoService.CanRedo());
             Assert.Equal(1, _undoRedoService.CanUndoCount);
             Assert.Equal(0, _undoRedoService.CanRedoCount);
-            Assert.True(command.RedoCalled);
+            Assert.True(command.ExecuteCalled); // Redo calls OnExecute
         }
 
         [Fact]

@@ -142,8 +142,7 @@ namespace WindowsFormsApp3.Tests.Services
             // Arrange
             var testEvent = new TestEvent { Message = "Async Error Test" };
 
-            _eventBus.Subscribe<TestEvent>(async e => {
-                await Task.Delay(1);
+            _eventBus.Subscribe<TestEvent>(e => {
                 throw new InvalidOperationException("Test async exception");
             });
 

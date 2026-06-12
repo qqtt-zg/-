@@ -317,7 +317,7 @@ namespace WindowsFormsApp3.Services
                 {
                     if (File.Exists(outputPdfPath))
                     {
-                        try { File.Delete(outputPdfPath); } catch { }
+                        try { File.Delete(outputPdfPath); } catch (Exception) { }
                     }
                     throw;
                 }

@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Utils;
 
@@ -73,8 +73,10 @@ namespace WindowsFormsApp3.Services
             catch (System.Exception ex)
             {
                 LogHelper.Debug($"[EventGroupConfigurationService] 获取EventGroup配置时出错: {ex.Message}");
-                return EventGroupConfiguration.GetDefault();
+                throw;
             }
         }
     }
 }
+
+

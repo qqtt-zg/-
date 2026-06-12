@@ -143,7 +143,7 @@ namespace WindowsFormsApp3.Utils
                     if (File.Exists(tempFile))
                         File.Delete(tempFile);
                 }
-                catch { }
+                catch (Exception) { }
 
                 return false;
             }

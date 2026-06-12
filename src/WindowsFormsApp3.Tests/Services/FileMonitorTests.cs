@@ -85,8 +85,8 @@ namespace WindowsFormsApp3.Tests.Services
             _fileMonitor.StartMonitoring(_testDirectory);
 
             // 创建测试文件
-            string testFilePath = Path.Combine(_testDirectory, "test_file.txt");
-            File.WriteAllText(testFilePath, "Test content");
+            string testFilePath = Path.Combine(_testDirectory, "test_file.pdf");
+            File.WriteAllBytes(testFilePath, new byte[] { 0x25, 0x50, 0x44, 0x46 });
 
             // 等待事件触发
             await Task.Delay(1000);
@@ -99,9 +99,9 @@ namespace WindowsFormsApp3.Tests.Services
         public async Task FileRenamedEvent_Should_Be_Raised_When_File_Is_Renamed()
         {
             // 创建测试文件
-            string originalFilePath = Path.Combine(_testDirectory, "original_file.txt");
-            string newFilePath = Path.Combine(_testDirectory, "renamed_file.txt");
-            File.WriteAllText(originalFilePath, "Test content");
+            string originalFilePath = Path.Combine(_testDirectory, "original_file.pdf");
+            string newFilePath = Path.Combine(_testDirectory, "renamed_file.pdf");
+            File.WriteAllBytes(originalFilePath, new byte[] { 0x25, 0x50, 0x44, 0x46 });
 
             // 开始监控
             _fileMonitor.StartMonitoring(_testDirectory);

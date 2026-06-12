@@ -1209,7 +1209,7 @@ namespace WindowsFormsApp3.Services
 
                         if (File.Exists(nCopyTempFile))
                         {
-                            try { File.Delete(nCopyTempFile); } catch { }
+                            try { File.Delete(nCopyTempFile); } catch (Exception) { }
                         }
 
                         return false;
@@ -1250,7 +1250,7 @@ namespace WindowsFormsApp3.Services
                             tempFileInfo.ErrorMessage = "一式N份页面复制失败";
                             if (File.Exists(tempOutputPath))
                             {
-                                try { File.Delete(tempOutputPath); } catch { }
+                                try { File.Delete(tempOutputPath); } catch (Exception) { }
                             }
                             return false;
                         }

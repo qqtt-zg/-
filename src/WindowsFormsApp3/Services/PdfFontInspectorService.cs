@@ -241,7 +241,7 @@ namespace WindowsFormsApp3.Services
                             fontInfo.EmbeddedSize = fontData?.Length;
                         }
                     }
-                    catch { }
+                    catch (Exception) { }
                 }
                 else
                 {

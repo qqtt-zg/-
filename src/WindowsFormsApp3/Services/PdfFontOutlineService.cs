@@ -41,7 +41,7 @@ namespace WindowsFormsApp3.Services
                     {
                         File.Delete(tempOutput);
                     }
-                    catch { }
+                    catch (Exception) { }
                     
                     return result;
                 }

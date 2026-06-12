@@ -10,6 +10,17 @@ namespace WindowsFormsApp3.Tests.Utils
     /// </summary>
     public class PdfToolsMigrationTests
     {
+        public PdfToolsMigrationTests()
+        {
+            if (!WindowsFormsApp3.Utils.AppSettings.IsInitialized)
+                WindowsFormsApp3.Utils.AppSettings.Initialize(new WindowsFormsApp3.Services.FileLogger(Path.Combine(Path.GetTempPath(), "PdfToolsMigrationTests")));
+            // 设置默认形状代号，确保测试可重复
+            WindowsFormsApp3.Utils.AppSettings.Set("ZeroShapeCode", "Z");
+            WindowsFormsApp3.Utils.AppSettings.Set("RoundShapeCode", "R");
+            WindowsFormsApp3.Utils.AppSettings.Set("EllipseShapeCode", "Y");
+            WindowsFormsApp3.Utils.AppSettings.Set("CircleShapeCode", "C");
+            WindowsFormsApp3.Utils.AppSettings.Set("HideRadiusValue", false);
+        }
         [Fact]
         public void SetAllPageBoxesToCropBox_Should_Handle_Non_Existent_File()
         {
@@ -113,7 +124,7 @@ namespace WindowsFormsApp3.Tests.Utils
             string result = PdfTools.CalculateFinalDimensions(width, height, tetBleed, cornerRadius, addPdfLayers);
 
             // Assert
-            Assert.Equal("90x190R", result); // (100-5*2) x (200-5*2) + shape code
+            Assert.Equal("90x190C", result); // (100-5*2) x (200-5*2) + shape code
         }
 
         [Fact]

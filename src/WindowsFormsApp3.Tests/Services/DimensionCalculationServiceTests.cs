@@ -22,7 +22,17 @@ namespace WindowsFormsApp3.Tests.Services
             _mockPdfDimensionService = new Mock<IPdfDimensionService>();
             _mockLogger = new Mock<ILogger>();
             _service = new DimensionCalculationService(_mockPdfDimensionService.Object, _mockLogger.Object);
+
             
+            // 初始化AppSettings
+            if (!WindowsFormsApp3.Utils.AppSettings.IsInitialized)
+                WindowsFormsApp3.Utils.AppSettings.Initialize(_mockLogger.Object);
+            // 设置默认形状代号
+            WindowsFormsApp3.Utils.AppSettings.Set("ZeroShapeCode", "Z");
+            WindowsFormsApp3.Utils.AppSettings.Set("RoundShapeCode", "R");
+            WindowsFormsApp3.Utils.AppSettings.Set("EllipseShapeCode", "Y");
+            WindowsFormsApp3.Utils.AppSettings.Set("CircleShapeCode", "C");
+            WindowsFormsApp3.Utils.AppSettings.Set("HideRadiusValue", false);            
             // 创建测试目录
             _testDirectory = Path.Combine(Path.GetTempPath(), "DimensionCalcTests_" + DateTime.Now.Ticks.ToString());
             Directory.CreateDirectory(_testDirectory);

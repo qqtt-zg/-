@@ -454,12 +454,12 @@ namespace WindowsFormsApp3.Utils
                                             dynamic menuItem = item;
                                             menuItem.ForeColor = _currentTheme.TextPrimary;
                                         }
-                                        catch { }
+                                        catch (Exception) { }
                                     }
                                 }
                             }
                         }
-                        catch { }
+                        catch (Exception) { }
                         
                         control.Invalidate();
                         control.Refresh();
@@ -538,9 +538,9 @@ namespace WindowsFormsApp3.Utils
                         }
                     }
                 }
-                catch { }
+                catch (Exception) { }
             }
-            catch { }
+            catch (Exception) { }
         }
         
         /// <summary>

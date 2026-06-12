@@ -1334,7 +1334,7 @@ public static bool ReorganizePagesWithIndirectReference(string filePath)
                     if (File.Exists(tempFile))
                         File.Delete(tempFile);
                 }
-                catch { }
+                catch (Exception) { }
                 
                 return false;
             }
