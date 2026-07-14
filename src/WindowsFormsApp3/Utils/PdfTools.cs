@@ -305,6 +305,12 @@ namespace WindowsFormsApp3.Utils
                     File.Delete(filePath);
                     File.Move(tempFilePath, filePath);
 
+                    if (!SetAllPageBoxesToCropBox(filePath))
+                    {
+                        LogHelper.Debug("AddDotsAddCounterLayer最终页面框统一失败");
+                        return false;
+                    }
+
                     LogHelper.Debug("AddDotsAddCounterLayer（枚举版本）完成");
                     return true;
                 }
@@ -938,7 +944,7 @@ public static bool ReorganizePagesWithIndirectReference(string filePath)
 
                 // 确定统一的基准框：优先使用最常见的有效CropBox，否则使用最常见的MediaBox
                 var cropBoxGroups = pageSizes.Where(p => p.cropBox != null && p.cropBox.GetWidth() > 0 && p.cropBox.GetHeight() > 0)
-                                            .GroupBy(p => $"{p.cropBox.GetWidth():F3}x{p.cropBox.GetHeight():F3}")
+                                            .GroupBy(p => $"{p.cropBox.GetLeft():F3},{p.cropBox.GetBottom():F3},{p.cropBox.GetWidth():F3}x{p.cropBox.GetHeight():F3}")
                                             .OrderByDescending(g => g.Count())
                                             .FirstOrDefault();
 
@@ -950,7 +956,7 @@ public static bool ReorganizePagesWithIndirectReference(string filePath)
                 else
                 {
                     var mediaBoxGroups = pageSizes.Where(p => p.mediaBox != null && p.mediaBox.GetWidth() > 0 && p.mediaBox.GetHeight() > 0)
-                                                .GroupBy(p => $"{p.mediaBox.GetWidth():F3}x{p.mediaBox.GetHeight():F3}")
+                                                .GroupBy(p => $"{p.mediaBox.GetLeft():F3},{p.mediaBox.GetBottom():F3},{p.mediaBox.GetWidth():F3}x{p.mediaBox.GetHeight():F3}")
                                                 .OrderByDescending(g => g.Count())
                                                 .FirstOrDefault();
 
@@ -990,6 +996,34 @@ public static bool ReorganizePagesWithIndirectReference(string filePath)
                     LogHelper.Debug("- ArtBox: " + (artBox?.GetWidth() ?? -1) + "x" + (artBox?.GetHeight() ?? -1));
 
                     LogHelper.Debug($"使用统一基准框: {unifiedBaseBox.GetWidth():F3}x{unifiedBaseBox.GetHeight():F3}");
+
+                    var visibleBox = cropBox ?? mediaBox;
+                    if (visibleBox != null)
+                    {
+                        float translateX = unifiedBaseBox.GetLeft() - visibleBox.GetLeft();
+                        float translateY = unifiedBaseBox.GetBottom() - visibleBox.GetBottom();
+
+                        if (Math.Abs(translateX) > 0.001f || Math.Abs(translateY) > 0.001f)
+                        {
+                            LogHelper.Debug($"页面{i} 检测到非零页面原点，平移内容: dx={translateX:F3}, dy={translateY:F3}");
+
+                            // 统一页面框会改变可视区域原点，必须同步平移原内容流。
+                            // 通过前后包裹 q/cm/Q，避免破坏页面已有绘制指令。
+                            string beforeCommands = string.Format(
+                                System.Globalization.CultureInfo.InvariantCulture,
+                                "q\n1 0 0 1 {0:0.###} {1:0.###} cm\n",
+                                translateX,
+                                translateY);
+
+                            page.NewContentStreamBefore()
+                                .GetOutputStream()
+                                .WriteBytes(System.Text.Encoding.ASCII.GetBytes(beforeCommands));
+
+                            page.NewContentStreamAfter()
+                                .GetOutputStream()
+                                .WriteBytes(System.Text.Encoding.ASCII.GetBytes("Q\n"));
+                        }
+                    }
 
                     // 将所有页面框设置为统一基准框 - 保持Adobe Acrobat兼容性
                     page.SetMediaBox(unifiedBaseBox);

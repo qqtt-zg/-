@@ -19,7 +19,7 @@ namespace WindowsFormsApp3.Utils
             {
                 var envRoot = Environment.GetEnvironmentVariable("CODEX_APPDATA_ROOT");
                 var path = string.IsNullOrEmpty(envRoot)
-                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "澶ц瘹閲嶅懡鍚嶅伐鍏?")
+                    ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "大诚重命名工具")
                     : envRoot;
                 EnsureDirectoryExists(path);
                 return path;

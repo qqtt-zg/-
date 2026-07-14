@@ -6,25 +6,36 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 using Moq;
+using iText.Kernel.Font;
+using iText.Kernel.Pdf;
+using iText.Kernel.Pdf.Canvas;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Data;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Interfaces;
+using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Tests.Services
 {
-    public class FileRenameServiceTests
+    public class FileRenameServiceTests : IDisposable
     {
         private readonly FileRenameService _fileRenameService;
         private readonly string _testDirectory;
         private readonly string _exportDirectory;
+        private readonly string _appDataDirectory;
 
         public FileRenameServiceTests()
         {
             // 创建测试目录
             _testDirectory = Path.Combine(Path.GetTempPath(), "FileRenameServiceTests_", DateTime.Now.Ticks.ToString());
             _exportDirectory = Path.Combine(_testDirectory, "Export");
+            _appDataDirectory = Path.Combine(_testDirectory, "AppData");
             Directory.CreateDirectory(_testDirectory);
             Directory.CreateDirectory(_exportDirectory);
+            Directory.CreateDirectory(_appDataDirectory);
+            Environment.SetEnvironmentVariable("CODEX_APPDATA_ROOT", _appDataDirectory);
 
             // 创建模拟服务，使用Mock的IEventBus
             var mockEventBus = new Mock<WindowsFormsApp3.Services.IEventBus>();
@@ -113,6 +124,148 @@ namespace WindowsFormsApp3.Tests.Services
         }
 
         [Fact]
+        public void RenameFileImmediately_WithPdfProcessing_Should_Unify_PageBoxes()
+        {
+            string sourcePdfPath = Path.Combine(_testDirectory, "mixed_pages.pdf");
+            string outputFilePath = Path.Combine(_exportDirectory, "processed.pdf");
+
+            CreateTestPdfWithMixedPageSizes(sourcePdfPath);
+
+            var fileInfo = new FileRenameInfo
+            {
+                FullPath = sourcePdfPath,
+                NewName = "processed.pdf"
+            };
+
+            var pdfOptions = new PdfProcessingOptions
+            {
+                AddPdfLayers = true,
+                ShapeType = global::WindowsFormsApp3.ShapeType.RightAngle,
+                FinalDimensions = string.Empty,
+                AddIdentifierPage = false,
+                LayoutMode = LayoutMode.Continuous,
+                CopyType = CopyType.Layout,
+                CopyCount = 0,
+                DuplicateCount = 0,
+                RequireLayerCheck = false
+            };
+
+            bool success = _fileRenameService.RenameFileImmediately(fileInfo, _exportDirectory, false, pdfOptions);
+
+            Assert.True(success);
+            Assert.True(File.Exists(outputFilePath));
+
+            using (var reader = new PdfReader(outputFilePath))
+            using (var document = new PdfDocument(reader))
+            {
+                var firstPageBox = document.GetPage(1).GetCropBox() ?? document.GetPage(1).GetMediaBox();
+                for (int i = 2; i <= document.GetNumberOfPages(); i++)
+                {
+                    var pageBox = document.GetPage(i).GetCropBox() ?? document.GetPage(i).GetMediaBox();
+                    Assert.Equal(firstPageBox.GetWidth(), pageBox.GetWidth());
+                    Assert.Equal(firstPageBox.GetHeight(), pageBox.GetHeight());
+                }
+            }
+        }
+
+        [Fact]
+        public void SetAllPageBoxesToCropBox_Should_Unify_Mixed_PageSizes()
+        {
+            string sourcePdfPath = Path.Combine(_testDirectory, "mixed_pages_boxes.pdf");
+            CreateTestPdfWithMixedPageSizes(sourcePdfPath);
+
+            bool success = PdfTools.SetAllPageBoxesToCropBox(sourcePdfPath);
+
+            Assert.True(success);
+
+            using (var reader = new PdfReader(sourcePdfPath))
+            using (var document = new PdfDocument(reader))
+            {
+                var firstPageBox = document.GetPage(1).GetCropBox() ?? document.GetPage(1).GetMediaBox();
+                for (int i = 2; i <= document.GetNumberOfPages(); i++)
+                {
+                    var pageBox = document.GetPage(i).GetCropBox() ?? document.GetPage(i).GetMediaBox();
+                    Assert.Equal(firstPageBox.GetWidth(), pageBox.GetWidth());
+                    Assert.Equal(firstPageBox.GetHeight(), pageBox.GetHeight());
+                }
+            }
+        }
+
+        [Fact]
+        public void SetAllPageBoxesToCropBox_AfterShapeProcessing_Should_Unify_PageSizes()
+        {
+            string sourcePdfPath = Path.Combine(_testDirectory, "mixed_pages_after_shape.pdf");
+            CreateTestPdfWithMixedPageSizes(sourcePdfPath);
+
+            bool shapeSuccess = PdfTools.AddDotsAddCounterLayer(sourcePdfPath, string.Empty, global::WindowsFormsApp3.ShapeType.RightAngle, 0);
+            Assert.True(shapeSuccess);
+
+            bool success = PdfTools.SetAllPageBoxesToCropBox(sourcePdfPath);
+
+            Assert.True(success);
+
+            using (var reader = new PdfReader(sourcePdfPath))
+            using (var document = new PdfDocument(reader))
+            {
+                var firstPageBox = document.GetPage(1).GetCropBox() ?? document.GetPage(1).GetMediaBox();
+                for (int i = 2; i <= document.GetNumberOfPages(); i++)
+                {
+                    var pageBox = document.GetPage(i).GetCropBox() ?? document.GetPage(i).GetMediaBox();
+                    Assert.Equal(firstPageBox.GetWidth(), pageBox.GetWidth());
+                    Assert.Equal(firstPageBox.GetHeight(), pageBox.GetHeight());
+                }
+            }
+        }
+
+        [Fact]
+        public void AdvancedPageReorganizer_Should_Unify_Mixed_PageSizes()
+        {
+            string sourcePdfPath = Path.Combine(_testDirectory, "mixed_pages_reorg.pdf");
+            CreateTestPdfWithMixedPageSizes(sourcePdfPath);
+
+            bool success = PdfTools.AdvancedPageReorganizer.ExecuteAdvancedReorganization(sourcePdfPath, out _);
+
+            Assert.True(success);
+
+            using (var reader = new PdfReader(sourcePdfPath))
+            using (var document = new PdfDocument(reader))
+            {
+                var firstPageBox = document.GetPage(1).GetCropBox() ?? document.GetPage(1).GetMediaBox();
+                for (int i = 2; i <= document.GetNumberOfPages(); i++)
+                {
+                    var pageBox = document.GetPage(i).GetCropBox() ?? document.GetPage(i).GetMediaBox();
+                    Assert.Equal(firstPageBox.GetWidth(), pageBox.GetWidth());
+                    Assert.Equal(firstPageBox.GetHeight(), pageBox.GetHeight());
+                }
+            }
+        }
+
+        [Fact]
+        public void SetAllPageBoxesToCropBox_Should_Translate_Content_When_PageOrigin_Is_Not_Zero()
+        {
+            string sourcePdfPath = Path.Combine(_testDirectory, "non_zero_origin.pdf");
+            CreatePdfWithNonZeroFirstPageOrigin(sourcePdfPath);
+
+            bool success = PdfTools.SetAllPageBoxesToCropBox(sourcePdfPath);
+
+            Assert.True(success);
+
+            using (var reader = new PdfReader(sourcePdfPath))
+            using (var document = new PdfDocument(reader))
+            {
+                var firstPageBox = document.GetPage(1).GetCropBox();
+                Assert.Equal(0, firstPageBox.GetLeft(), 3);
+                Assert.Equal(0, firstPageBox.GetBottom(), 3);
+
+                var listener = new TextPositionListener();
+                var processor = new PdfCanvasProcessor(listener);
+                processor.ProcessPageContent(document.GetPage(1));
+
+                Assert.True(listener.MinX < 50, $"第一页内容未随页面框平移，当前最小X坐标: {listener.MinX}");
+            }
+        }
+
+        [Fact]
         public void BatchRenameFiles_Should_Return_Correct_Success_Count()
         {
             // 准备测试文件
@@ -176,6 +329,73 @@ namespace WindowsFormsApp3.Tests.Services
             
             // 验证结果
             Assert.Equal(0, successCount);
+        }
+
+        private static void CreateTestPdfWithMixedPageSizes(string filePath)
+        {
+            using (var writer = new PdfWriter(filePath))
+            using (var document = new PdfDocument(writer))
+            {
+                document.AddNewPage(new iText.Kernel.Geom.PageSize(200, 300));
+                document.AddNewPage(new iText.Kernel.Geom.PageSize(200, 300));
+                document.AddNewPage(new iText.Kernel.Geom.PageSize(320, 420));
+            }
+        }
+
+        private static void CreatePdfWithNonZeroFirstPageOrigin(string filePath)
+        {
+            using (var writer = new PdfWriter(filePath))
+            using (var document = new PdfDocument(writer))
+            {
+                var font = PdfFontFactory.CreateFont();
+                var offsetBox = new iText.Kernel.Geom.Rectangle(274, 327, 255, 124);
+                var normalBox = new iText.Kernel.Geom.Rectangle(0, 0, 255, 124);
+
+                var firstPage = document.AddNewPage(new iText.Kernel.Geom.PageSize(offsetBox));
+                firstPage.SetMediaBox(offsetBox);
+                firstPage.SetCropBox(offsetBox);
+                DrawText(firstPage, font, offsetBox.GetLeft() + 10, offsetBox.GetBottom() + 20, "FIRST_PAGE_MARK");
+
+                for (int i = 0; i < 2; i++)
+                {
+                    var page = document.AddNewPage(new iText.Kernel.Geom.PageSize(normalBox));
+                    page.SetMediaBox(normalBox);
+                    page.SetCropBox(normalBox);
+                    DrawText(page, font, 10, 20, "NORMAL_PAGE_MARK");
+                }
+            }
+        }
+
+        private static void DrawText(PdfPage page, PdfFont font, float x, float y, string text)
+        {
+            var canvas = new PdfCanvas(page);
+            canvas.BeginText()
+                .SetFontAndSize(font, 10)
+                .MoveText(x, y)
+                .ShowText(text)
+                .EndText();
+            canvas.Release();
+        }
+
+        private sealed class TextPositionListener : IEventListener
+        {
+            public float MinX { get; private set; } = float.MaxValue;
+
+            public void EventOccurred(IEventData data, EventType type)
+            {
+                if (type != EventType.RENDER_TEXT || !(data is TextRenderInfo textRenderInfo))
+                {
+                    return;
+                }
+
+                float x = textRenderInfo.GetBaseline().GetStartPoint().Get(0);
+                MinX = Math.Min(MinX, x);
+            }
+
+            public ICollection<EventType> GetSupportedEvents()
+            {
+                return new[] { EventType.RENDER_TEXT };
+            }
         }
         
         [Fact]
@@ -395,6 +615,22 @@ namespace WindowsFormsApp3.Tests.Services
             // 验证结果是带递增计数器的新文件名
             string expectedPath = Path.Combine(_testDirectory, "conflict_file(3).txt");
             Assert.Equal(expectedPath, result);
+        }
+
+        public void Dispose()
+        {
+            Environment.SetEnvironmentVariable("CODEX_APPDATA_ROOT", null);
+            if (Directory.Exists(_testDirectory))
+            {
+                try
+                {
+                    Directory.Delete(_testDirectory, true);
+                }
+                catch
+                {
+                    // 忽略测试清理失败
+                }
+            }
         }
     }
 }

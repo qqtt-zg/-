@@ -152,6 +152,12 @@ namespace WindowsFormsApp3.Services
                 File.Move(tempFilePath, filePath);
 
                 LogHelper.Debug("ProcessSpecialShapePdf执行GC清理，处理完成");
+                if (!WindowsFormsApp3.Utils.PdfTools.SetAllPageBoxesToCropBox(filePath))
+                {
+                    LogHelper.Debug("ProcessSpecialShapePdf最终页面框统一失败");
+                    return false;
+                }
+
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
 

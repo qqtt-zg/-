@@ -565,6 +565,15 @@ namespace WindowsFormsApp3.Services
                     }
                 }, cancellationToken);
 
+                if (!PdfTools.SetAllPageBoxesToCropBox(newFilePath))
+                {
+                    LogHelper.Debug($"最终输出文件页面框统一失败: {newFilePath}");
+                    fileInfo.Status = "页面统一失败";
+                    fileInfo.ErrorMessage = "页面统一失败";
+                    RaiseFileRenameFailed(fileInfo, "页面统一失败");
+                    return false;
+                }
+
                 // 更新文件信息
                 fileInfo.FullPath = newFilePath;
                 fileInfo.Status = "已重命名";
@@ -922,6 +931,15 @@ namespace WindowsFormsApp3.Services
                     File.Move(processedTempFile, newFilePath);
                 }
 
+                if (!PdfTools.SetAllPageBoxesToCropBox(newFilePath))
+                {
+                    LogHelper.Debug($"最终输出文件页面框统一失败: {newFilePath}");
+                    fileInfo.Status = "页面统一失败";
+                    fileInfo.ErrorMessage = "页面统一失败";
+                    RaiseFileRenameFailed(fileInfo, "页面统一失败");
+                    return false;
+                }
+
                 // 更新文件信息
                 fileInfo.FullPath = newFilePath;
                 fileInfo.Status = "已重命名";
@@ -1256,6 +1274,18 @@ namespace WindowsFormsApp3.Services
                         }
                     }
                 }
+
+                // 最终统一页面框尺寸：保证所有页面输出为同一尺寸
+                // 放在所有形状/复制处理之后，避免后续步骤把页面尺寸再改回去
+                LogHelper.Debug($"=== 最终步骤：统一页面框尺寸 ===");
+                bool finalSetPageBoxesSuccess = PdfTools.SetAllPageBoxesToCropBox(tempFileInfo.FullPath);
+                if (!finalSetPageBoxesSuccess)
+                {
+                    LogHelper.Debug($"✗ 最终页面统一处理失败: {tempFileInfo.FullPath}");
+                    tempFileInfo.ErrorMessage = "页面统一处理失败";
+                    return false;
+                }
+                LogHelper.Debug($"✓ 最终页面统一处理成功: {tempFileInfo.FullPath}");
 
                 LogHelper.Debug($"PDF处理完成: {tempFileInfo.FullPath}");
                 return true;
