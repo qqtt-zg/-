@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using WindowsFormsApp3.Models;
@@ -93,6 +93,12 @@ namespace WindowsFormsApp3.Forms.Panels
         /// </summary>
         /// <param name="patterns">正则表达式模式列表</param>
         void UpdateRegexComboBox(List<string> patterns);
+
+        /// <summary>
+        /// 设置当前选中的正则表达式模式（用于与材料选择框同步）
+        /// </summary>
+        /// <param name="patternName">正则规则名称</param>
+        void SetSelectedRegexPattern(string patternName);
 
         /// <summary>
         /// 更新JSON文件下拉框
@@ -220,8 +226,16 @@ namespace WindowsFormsApp3.Forms.Panels
             int initialSerialNumber,
             bool enableSerialSearchResultToRegex,
             int serialSearchResultColumnIndex,
-            out MaterialSelectionResult result
+            out MaterialSelectionResult result,
+            List<string> pendingBatchFiles = null
         );
+
+        /// <summary>
+        /// 当材料选择对话框处于打开状态时，动态追加新进入监控文件夹的文件
+        /// </summary>
+        /// <param name="filePath">新进入的文件路径</param>
+        void NotifyNewMonitoredFile(string filePath);
+
 
         #endregion
 

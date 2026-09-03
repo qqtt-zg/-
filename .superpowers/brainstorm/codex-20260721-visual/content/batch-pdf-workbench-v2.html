@@ -1,0 +1,73 @@
+<style>
+  .shell{border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;background:#f8fafc;color:#1e293b;font-size:12px}
+  .top{display:flex;gap:8px;align-items:center;padding:10px;background:#e9eef5;border-bottom:1px solid #cbd5e1}
+  .top strong{font-size:14px;margin-right:auto}.b{padding:6px 10px;border:1px solid #94a3b8;border-radius:6px;background:white}.primary{background:#1677ff;color:white;border-color:#1677ff}
+  .body{display:grid;grid-template-columns:minmax(560px,1fr) 360px;min-height:520px}.left{padding:10px;border-right:1px solid #cbd5e1}.right{padding:10px;background:white}
+  .rulebar{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}.rule{border:1px solid #cbd5e1;border-radius:8px;padding:8px;background:white}.rule b{display:block;margin-bottom:4px}.source{color:#1677ff}
+  table{width:100%;border-collapse:collapse;background:white}th,td{border:1px solid #dbe2ea;padding:6px;text-align:left}th{background:#eef2f7;font-size:11px}.ok{color:#15803d}.warn{color:#b45309}.badge{padding:2px 5px;border-radius:8px;background:#e6f4ff;color:#0958d9;font-size:10px}
+  .group{border:1px solid #dbe2ea;border-radius:9px;margin-bottom:8px;overflow:hidden}.gh{padding:7px 9px;background:#f1f5f9;font-weight:700;display:flex;justify-content:space-between}.gc{padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:6px}.kv{padding:5px;background:#f8fafc;border-radius:5px}.kv span{display:block;color:#64748b;font-size:10px}.full{grid-column:1/-1}
+  .bottom{display:flex;align-items:center;gap:10px;padding:10px;border-top:1px solid #cbd5e1;background:#eef2f7}.bottom .grow{flex:1}.meter{height:7px;background:#cbd5e1;border-radius:5px;overflow:hidden}.meter i{display:block;width:0;height:100%;background:#1677ff}
+  .notes{margin-top:16px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.note{padding:10px;border-left:4px solid #1677ff;background:#f0f7ff;border-radius:7px}.note b{display:block;margin-bottom:4px}
+  @media(max-width:1100px){.body{grid-template-columns:1fr}.right{border-top:1px solid #cbd5e1}.notes{grid-template-columns:1fr}}
+</style>
+
+<h2>批量 PDF 工作台 · 完整字段版</h2>
+<p class="subtitle">固定复制输出；材料选择方式沿用单文件流程；批次参数只设置一次，特殊文件可覆盖。</p>
+
+<div class="shell">
+  <div class="top">
+    <strong>批量 PDF 处理</strong>
+    <span class="b">＋ 添加 PDF</span><span class="b">导入 Excel</span><span class="b">匹配数据</span><span class="b primary">设置批次参数</span><span class="b">预检</span>
+  </div>
+  <div class="body">
+    <div class="left">
+      <div class="rulebar">
+        <div class="rule"><b>数量规则</b><span class="source">Excel 匹配</span>　<span>统一增减 +0</span></div>
+        <div class="rule"><b>订单号规则</b><span class="source">列表序列</span>　JOB-0001 起</div>
+        <div class="rule"><b>序号规则</b><span class="source">Excel / 列表序列</span></div>
+      </div>
+      <table>
+        <thead><tr><th>✓</th><th>源文件</th><th>匹配键</th><th>数量</th><th>订单号</th><th>序号</th><th>布局</th><th>旋转</th><th>来源/状态</th></tr></thead>
+        <tbody>
+          <tr><td>✓</td><td>A-1001.pdf</td><td>A-1001</td><td>100</td><td>JOB-0001</td><td>01</td><td>3×4 = 12</td><td>自动 270°</td><td><span class="badge">Excel</span> <span class="ok">就绪</span></td></tr>
+          <tr><td>✓</td><td>A-1001.pdf ↳ #2</td><td>A-1001</td><td>250</td><td>JOB-0002</td><td>02</td><td>3×4 = 12</td><td>自动 270°</td><td><span class="badge">Excel一对多</span> <span class="ok">就绪</span></td></tr>
+          <tr><td>✓</td><td>B-2030.pdf</td><td>B-2030</td><td>80</td><td>JOB-0003</td><td>03</td><td>2×4 = 8</td><td>不旋转</td><td><span class="badge">列表序列</span> <span class="warn">单项覆盖</span></td></tr>
+          <tr><td>✓</td><td>C-0088.pdf</td><td>C-0088</td><td>50</td><td>JOB-0004</td><td>04</td><td>不可排</td><td>—</td><td><span class="warn">尺寸超出</span></td></tr>
+        </tbody>
+      </table>
+      <div style="margin-top:9px;color:#64748b">选中 4 个任务（3 个源文件）　·　双击行或点击“单独设置”覆盖当前文件</div>
+    </div>
+
+    <div class="right">
+      <div class="group">
+        <div class="gh"><span>材料组合预设</span><span class="source">沿用材料选择框</span></div>
+        <div class="gc"><div class="kv"><span>预设</span>车贴 · 标准</div><div class="kv"><span>材料</span>白胶车贴</div><div class="kv"><span>颜色 / 膜</span>彩色 / 光膜</div><div class="kv"><span>出血 / 间距</span>2 mm / 0 mm</div><div class="full"><span class="b primary">打开现有材料选择框</span>　<span class="b">应用到选中文件</span></div></div>
+      </div>
+      <div class="group">
+        <div class="gh"><span>形状与图层</span><span>批次默认</span></div>
+        <div class="gc"><div class="kv"><span>形状</span>圆角矩形</div><div class="kv"><span>圆角半径</span>R5</div><div class="kv"><span>最终尺寸</span>84 × 54 mm</div><div class="kv"><span>图层检查</span>开启</div></div>
+      </div>
+      <div class="group">
+        <div class="gh"><span>排版与旋转</span><span>算法逐文件计算</span></div>
+        <div class="gc"><div class="kv"><span>材料类型</span>平张</div><div class="kv"><span>排版状态</span>折手</div><div class="kv"><span>纸张 / 边距</span>320×450 / 10 mm</div><div class="kv"><span>布局数量</span>每文件预检结果</div><div class="kv"><span>旋转</span>自动</div><div class="kv"><span>一式</span>2 联 · 自适应列</div></div>
+      </div>
+      <div class="group">
+        <div class="gh"><span>输出</span><span class="ok">仅复制</span></div>
+        <div class="gc"><div class="kv full"><span>输出目录</span>D:\Output\2026-07-21</div><div class="kv"><span>同名策略</span>自动编号</div><div class="kv"><span>源文件</span>始终保留</div></div>
+      </div>
+      <span class="b">单独设置选中文件</span>　<span class="b">恢复批次设置</span>
+    </div>
+  </div>
+  <div class="bottom"><div class="grow"><b>预检：3 个就绪，1 个阻断</b><div class="meter"><i></i></div></div><span class="b">导出预检报告</span><span class="b primary">复制处理 3 个就绪任务</span></div>
+</div>
+
+<div class="notes">
+  <div class="note"><b>Excel 一对多</b>同一源文件展开为多个输出任务；每个任务绑定同一 Excel 行的数量与序号组合。</div>
+  <div class="note"><b>批次参数</b>只打开一次现有材料选择框；布局数量按每个 PDF 的尺寸单独计算。</div>
+  <div class="note"><b>安全边界</b>没有移动模式、没有标识页；不可排版和数据冲突在预检阶段阻断。</div>
+</div>
+
+<div class="options" style="margin-top:18px">
+  <div class="option" data-choice="approve-v2" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>这个信息架构方向正确</h3><p>继续细化材料选择框与单文件覆盖交互。</p></div></div>
+  <div class="option" data-choice="revise-v2" onclick="toggleSelect(this)"><div class="letter">↻</div><div class="content"><h3>仍需调整</h3><p>点击后请在终端告诉我哪些区域需要修改。</p></div></div>
+</div>

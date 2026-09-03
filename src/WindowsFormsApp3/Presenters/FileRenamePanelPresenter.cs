@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -40,6 +40,7 @@ namespace WindowsFormsApp3.Presenters
         private readonly Queue<string> _pendingFiles = new Queue<string>();
         private readonly HashSet<string> _enqueuedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTime> _recentEnqueueTimes = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+        private readonly List<string> _recentArrivals = new List<string>();
         private bool _isFileQueueWorkerRunning;
 
         // 数据存储
@@ -686,6 +687,27 @@ namespace WindowsFormsApp3.Presenters
 
                     _pendingFiles.Enqueue(filePath);
                     _enqueuedFiles.Add(filePath);
+                    if (!_recentArrivals.Contains(filePath, StringComparer.OrdinalIgnoreCase))
+                    {
+                        _recentArrivals.Add(filePath);
+                    }
+
+                    // 如果当前材料选择对话框正在打开，实时动态追加到左侧待处理列表中
+                    try
+                    {
+                        if (_view is System.Windows.Forms.Control viewCtrl && viewCtrl.InvokeRequired)
+                        {
+                            viewCtrl.BeginInvoke((Action)(() => _view.NotifyNewMonitoredFile(filePath)));
+                        }
+                        else
+                        {
+                            _view.NotifyNewMonitoredFile(filePath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogDebug($"[EnqueueMonitoredFile] 通知当前对话框追加新文件失败: {ex.Message}");
+                    }
 
                     if (!_isFileQueueWorkerRunning)
                     {
@@ -731,6 +753,7 @@ namespace WindowsFormsApp3.Presenters
                     lock (_fileQueueLock)
                     {
                         _enqueuedFiles.Remove(filePath);
+                        _recentArrivals.RemoveAll(r => string.Equals(r, filePath, StringComparison.OrdinalIgnoreCase));
                     }
                 }
             }
@@ -928,6 +951,165 @@ namespace WindowsFormsApp3.Presenters
         /// 处理新文件
         /// </summary>
         /// <param name="filePath">文件路径</param>
+                /// <summary>
+        /// 方案A：处理【应用到全部】批量文件列表流水线
+        /// </summary>
+        private async Task ProcessApplyToAllBatchAsync(MaterialSelectionResult selectionResult)
+        {
+            try
+            {
+                var batchItems = selectionResult.BatchItems;
+                _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 开始按列表顺序批量处理 {batchItems.Count} 款文件");
+
+                // 从待处理队列中移除这批文件，防止重复弹窗
+                lock (_fileQueueLock)
+                {
+                    var remaining = _pendingFiles.Where(p => !batchItems.Any(item => string.Equals(item.FilePath, p, StringComparison.OrdinalIgnoreCase))).ToList();
+                    _pendingFiles.Clear();
+                    foreach (var r in remaining)
+                    {
+                        _pendingFiles.Enqueue(r);
+                    }
+                    foreach (var item in batchItems)
+                    {
+                        _enqueuedFiles.Remove(item.FilePath);
+                        _recentArrivals.RemoveAll(r => string.Equals(r, item.FilePath, StringComparison.OrdinalIgnoreCase));
+                    }
+                }
+
+                // 保存共用的形状与排版信息
+                if (!string.IsNullOrEmpty(selectionResult.ExportPath))
+                {
+                    _exportPath = selectionResult.ExportPath;
+                    AppSettings.Instance.LastOutputDir = _exportPath;
+                }
+                _currentIsShapeSelected = selectionResult.IsShapeSelected;
+                _currentShapeType = (ShapeType)selectionResult.SelectedShape;
+                _currentRoundRadius = selectionResult.RoundRadius;
+                _currentDimensions = selectionResult.Dimensions ?? "";
+                _currentNeedsRotation = selectionResult.NeedsRotation;
+                _currentRotationAngle = selectionResult.RotationAngle;
+                _currentEnableImposition = selectionResult.EnableImposition;
+                _currentLayoutMode = selectionResult.LayoutMode;
+                _currentLayoutQuantity = selectionResult.LayoutQuantity;
+                _currentCopyCount = selectionResult.CopyCount;
+                _currentCopyType = selectionResult.CopyType;
+                _currentDuplicateCount = selectionResult.DuplicateCount;
+                _currentImpositionMaterialType = selectionResult.ImpositionMaterialType;
+                _currentAddIdentifierPage = selectionResult.AddIdentifierPage;
+                _currentIdentifierPageContent = selectionResult.IdentifierPageContent;
+
+                int successCount = 0;
+                var (dim, shape) = ParseDimensionsAndShape(selectionResult.Dimensions ?? "");
+
+                for (int i = 0; i < batchItems.Count; i++)
+                {
+                    var item = batchItems[i];
+                    _view.UpdateProgress(i + 1, batchItems.Count, $"正在处理 ({i + 1}/{batchItems.Count}): {item.FileName}");
+
+                    var currentFileInfo = CreateFileRenameInfo(item.FilePath);
+                    if (currentFileInfo == null)
+                    {
+                        currentFileInfo = new FileRenameInfo
+                        {
+                            FullPath = item.FilePath,
+                            OriginalName = item.FileName,
+                            FileExtension = Path.GetExtension(item.FilePath)
+                        };
+                    }
+
+                    // 填充参数
+                    currentFileInfo.Material = selectionResult.SelectedMaterial;
+                    currentFileInfo.OrderNumber = item.OrderNumber ?? "";
+                    currentFileInfo.Quantity = item.Quantity ?? "";
+                    currentFileInfo.SerialNumber = item.SerialNumber ?? (i + 1).ToString();
+                    currentFileInfo.Dimensions = dim;
+                    currentFileInfo.Shape = shape;
+                    currentFileInfo.Process = selectionResult.Process ?? "";
+                    currentFileInfo.LayoutRows = selectionResult.LayoutRows ?? "";
+                    currentFileInfo.LayoutColumns = selectionResult.LayoutColumns ?? "";
+                    currentFileInfo.ImpositionMode = GetImpositionModeString();
+
+                    // 计算平张布局数量
+                    UpdateBothLayoutCountsAsync(currentFileInfo);
+
+                    // 生成新文件名
+                    currentFileInfo.NewName = GenerateNewFileName(currentFileInfo);
+
+                    _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 款 {i + 1}/{batchItems.Count}: 文件={item.FileName}, 订单号={currentFileInfo.OrderNumber}, 数量={currentFileInfo.Quantity}, 新名称={currentFileInfo.NewName}");
+
+                    // 在UI表格中展示
+                    if (System.Windows.Forms.Application.OpenForms.Count > 0)
+                    {
+                        System.Windows.Forms.Application.OpenForms[0].Invoke((Action)(() =>
+                        {
+                            AddFileToTable(currentFileInfo);
+                        }));
+                    }
+
+                    // 执行重命名 / 复制
+                    bool success = await RenameFileAsync(currentFileInfo);
+                    if (success) successCount++;
+                }
+
+                _view.HideProgress();
+                _view.UpdateStatus($"批量应用完成: 成功 {successCount} 款, 共 {batchItems.Count} 款");
+                if (AppSettings.ShowRenameCompleteNotification)
+                {
+                    _view.ShowSuccess($"已成功按列表顺序批量处理 {successCount}/{batchItems.Count} 款文件");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"[ProcessApplyToAllBatchAsync] 批量处理异常: {ex.Message}");
+                _view.ShowError($"批量处理失败: {ex.Message}");
+            }
+        }
+
+                /// <summary>
+        /// 收集当前队列与监控同目录下的所有待处理文件
+        /// </summary>
+        private List<string> CollectPendingBatchFiles(string currentFilePath)
+        {
+            var pendingList = new List<string>();
+            if (!string.IsNullOrEmpty(currentFilePath) && File.Exists(currentFilePath))
+            {
+                pendingList.Add(currentFilePath);
+            }
+
+            lock (_fileQueueLock)
+            {
+                // 1. 从当前待处理队列收集
+                foreach (var p in _pendingFiles)
+                {
+                    if (!pendingList.Contains(p, StringComparer.OrdinalIgnoreCase) && File.Exists(p))
+                    {
+                        pendingList.Add(p);
+                    }
+                }
+
+                // 2. 从最近到达的文件列表收集（包括尚未完成就绪检查的文件）
+                foreach (var p in _recentArrivals)
+                {
+                    if (!pendingList.Contains(p, StringComparer.OrdinalIgnoreCase) && File.Exists(p))
+                    {
+                        pendingList.Add(p);
+                    }
+                }
+
+                // 3. 从当前已入队的文件集合收集
+                foreach (var p in _enqueuedFiles)
+                {
+                    if (!pendingList.Contains(p, StringComparer.OrdinalIgnoreCase) && File.Exists(p))
+                    {
+                        pendingList.Add(p);
+                    }
+                }
+            }
+
+            return pendingList;
+        }
+
         private async Task ProcessNewFileAsync(string filePath)
         {
             try
@@ -976,6 +1158,7 @@ namespace WindowsFormsApp3.Presenters
                             {
                                 // ✅ 修复：使用匹配正则结果（cmbRegex2）传递给对话框，用于Excel数据匹配
                                 string matchingRegexResult = GetRegexResultForMatching(fileInfo);
+                                var pendingBatchFiles = CollectPendingBatchFiles(fileInfo.FullPath);
                                 dialogResult = _view.ShowMaterialSelectionDialog(
                                     materials: _materials,
                                     fileName: fileInfo.FullPath,  // ✅ 修复：传递完整路径用于PDF预览
@@ -989,7 +1172,8 @@ namespace WindowsFormsApp3.Presenters
                                     initialSerialNumber: GetNextSerialNumber(),
                                     enableSerialSearchResultToRegex: _excelImportService.EnableSerialSearchResultToRegex,
                                     serialSearchResultColumnIndex: _excelImportService.SerialSearchResultColumnIndex,
-                                    out selectionResult
+                                    out selectionResult,
+                                    pendingBatchFiles: pendingBatchFiles
                                 );
                             }));
                         }
@@ -999,6 +1183,7 @@ namespace WindowsFormsApp3.Presenters
                             // 如果无法转换，直接调用（可能失败）
                             // ✅ 修复：使用匹配正则结果(cmbRegex2)传递给对话框，用于Excel数据匹配
                             string matchingRegexResult = GetRegexResultForMatching(fileInfo);
+                            var pendingBatchFilesFallback = CollectPendingBatchFiles(fileInfo.FullPath);
                             dialogResult = _view.ShowMaterialSelectionDialog(
                                 materials: _materials,
                                 fileName: fileInfo.FullPath,  // ✅ 修复：传递完整路径
@@ -1012,7 +1197,8 @@ namespace WindowsFormsApp3.Presenters
                                 initialSerialNumber: GetNextSerialNumber(),
                                 enableSerialSearchResultToRegex: _excelImportService.EnableSerialSearchResultToRegex,
                                 serialSearchResultColumnIndex: _excelImportService.SerialSearchResultColumnIndex,
-                                out selectionResult
+                                out selectionResult,
+                                pendingBatchFiles: pendingBatchFilesFallback
                             );
                         }
                     }
@@ -1025,9 +1211,21 @@ namespace WindowsFormsApp3.Presenters
 
                     _logger?.LogInformation($"[ProcessNewFileAsync] 材料选择对话框返回: {dialogResult}");
 
-                    if (dialogResult == System.Windows.Forms.DialogResult.OK && selectionResult != null)
+                                        if (dialogResult == System.Windows.Forms.DialogResult.OK && selectionResult != null)
                     {
                         _logger?.LogInformation($"[ProcessNewFileAsync] 用户选择材料: {selectionResult.SelectedMaterial}");
+                        // ✅ 如果材料选择框使用了正则提取模式，将选中的正则规则同步回主面板下拉框
+                        if (selectionResult.OrderNumberMode == OrderNumberMode.RegexExtraction && !string.IsNullOrEmpty(selectionResult.SelectedOrderRegexName))
+                        {
+                            _view.SetSelectedRegexPattern(selectionResult.SelectedOrderRegexName);
+                        }
+
+                        // ✅ 方案A：如果用户点击【应用到全部】，按确认的列表顺序批量处理
+                        if (selectionResult.IsApplyToAll && selectionResult.BatchItems != null && selectionResult.BatchItems.Count > 0)
+                        {
+                            await ProcessApplyToAllBatchAsync(selectionResult);
+                            return;
+                        }
                         
                         // ✅ 新增：解析逗号分隔的多个数量和序号值
                         var quantities = (selectionResult.SelectedQuantity ?? "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)

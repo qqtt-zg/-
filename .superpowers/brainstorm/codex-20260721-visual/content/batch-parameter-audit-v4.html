@@ -1,0 +1,58 @@
+<meta charset="utf-8">
+<style>
+  *{box-sizing:border-box}body{color:#172033;font:13px/1.45 "Microsoft YaHei",sans-serif}.title{margin:0 0 5px;font-size:22px}.sub{margin:0 0 16px;color:#667085}.app{border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;background:#f6f8fb;box-shadow:0 12px 35px #33415518}.top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border-bottom:1px solid #d8dee8}.top b{font-size:16px}.btn{display:inline-flex;align-items:center;gap:5px;border:1px solid #b8c2d0;background:#fff;border-radius:7px;padding:7px 10px;margin-left:5px}.btn.primary{background:#1769e0;border-color:#1769e0;color:#fff}.baseline{display:grid;grid-template-columns:1.15fr 1fr 1fr 1fr 1fr;gap:8px;padding:12px 14px;background:#eef3f8;border-bottom:1px solid #d7dee8}.base{background:#fff;border:1px solid #d8dee8;border-radius:9px;padding:8px 10px}.base span{display:block;color:#6b7280;font-size:11px}.base b{display:block;margin-top:3px;font-size:13px}.summary{display:flex;gap:9px;padding:12px 14px 0}.card{min-width:132px;border:1px solid #d8dee8;border-radius:9px;background:#fff;padding:9px 11px}.card b{font-size:21px;margin-right:5px}.card.warn b{color:#b77900}.card.bad b{color:#d92d20}.card.ok b{color:#16803c}.toolbar{display:flex;align-items:center;justify-content:space-between;padding:11px 14px}.seg{display:inline-flex;border:1px solid #b9c4d1;border-radius:8px;overflow:hidden;background:#fff}.seg span{padding:7px 11px;border-right:1px solid #d6dde7}.seg span:last-child{border:0}.seg .on{background:#1769e0;color:#fff}.filters{display:flex;align-items:center;gap:8px}.filter{padding:6px 9px;border:1px solid #c6cfda;background:#fff;border-radius:7px}.filter.on{border-color:#e9a600;background:#fff9dc;color:#8a5a00}.tablewrap{margin:0 14px 14px;border:1px solid #cbd5e1;border-radius:10px;overflow:auto;background:#fff}.matrix{border-collapse:separate;border-spacing:0;min-width:1420px;width:100%}.matrix th,.matrix td{border-right:1px solid #e1e6ed;border-bottom:1px solid #e1e6ed;padding:7px 8px;white-space:nowrap;text-align:left;position:relative}.matrix th{background:#e9eef5;color:#344054;font-size:11px;position:sticky;top:0;z-index:2}.matrix tr:last-child td{border-bottom:0}.matrix th:last-child,.matrix td:last-child{border-right:0}.matrix .sticky{position:sticky;left:0;z-index:3;background:#fff}.matrix th.sticky{z-index:4;background:#e9eef5}.matrix .status{left:164px}.file{width:164px;max-width:164px;overflow:hidden;text-overflow:ellipsis}.status{width:86px}.good{color:#16803c}.warncell{background:#fff8d8}.badcell{background:#fff0ee;color:#a9221a;font-weight:700}.algocell{background:#eff7ff}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}.dot.batch{background:#98a2b3}.dot.manual{background:#e5a000}.dot.excel{background:#16a36a}.dot.algo{background:#2986e6}.tag{display:inline-block;border-radius:10px;padding:1px 6px;font-size:10px}.tag.w{background:#fff0b3;color:#855b00}.tag.e{background:#ffdad5;color:#a61b13}.tag.g{background:#d8f5e2;color:#087333}.legend{display:flex;gap:16px;padding:0 14px 13px;color:#596579;font-size:11px}.note{border-left:4px solid #1769e0;background:#eef6ff;padding:10px 12px;margin-top:15px;border-radius:8px}.note b{display:block;margin-bottom:3px}.foot{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border-top:1px solid #d8dee8;background:#fff}.muted{color:#667085}
+</style>
+
+<h2 class="title">批次参数审计矩阵</h2>
+<p class="sub">不逐个打开文件：列表直接展示每个输出任务的最终生效值，并自动突出与批次基准不同或无法处理的项目。</p>
+
+<div class="app">
+  <div class="top">
+    <div><b>批量 PDF 处理</b>　<span class="muted">24 个源文件 · Excel 展开后 27 个输出任务</span></div>
+    <div><span class="btn">导入 Excel</span><span class="btn">设置批次参数</span><span class="btn primary">预检并处理</span></div>
+  </div>
+
+  <div class="baseline">
+    <div class="base"><span>材料 / 出血</span><b>白胶车贴 · 2 mm</b></div>
+    <div class="base"><span>形状</span><b>圆角矩形 · R5</b></div>
+    <div class="base"><span>旋转</span><b>自动（按拼版）</b></div>
+    <div class="base"><span>排版</span><b>连拼 · 间距 0 mm</b></div>
+    <div class="base"><span>输出方式</span><b>复制 · 保留源文件</b></div>
+  </div>
+
+  <div class="summary">
+    <div class="card ok"><b>21</b>完全一致</div>
+    <div class="card warn"><b>4</b>存在人工差异</div>
+    <div class="card bad"><b>2</b>预检错误</div>
+    <div class="card"><b>3</b>Excel 一对多任务</div>
+  </div>
+
+  <div class="toolbar">
+    <div class="seg"><span>业务数据</span><span class="on">PDF 处理</span><span>输出结果</span></div>
+    <div class="filters"><span class="filter on">仅看差异与错误（6）</span><span class="filter">仅看人工覆盖（4）</span><span class="filter">全部任务（27）</span></div>
+  </div>
+
+  <div class="tablewrap">
+    <table class="matrix">
+      <thead><tr><th class="sticky file">输出任务 / 源文件</th><th class="sticky status">状态</th><th>材料</th><th>纸张/卷材</th><th>出血</th><th>形状</th><th>圆角/模板</th><th>旋转</th><th>排版状态</th><th>布局数量</th><th>间距</th><th>数量</th><th>订单号</th><th>序号</th></tr></thead>
+      <tbody>
+        <tr><td class="sticky file">A-1001.pdf</td><td class="sticky status good">✓ 正常</td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td><i class="dot batch"></i>圆角矩形</td><td><i class="dot batch"></i>R5</td><td><i class="dot batch"></i>自动</td><td><i class="dot batch"></i>连拼</td><td class="algocell"><i class="dot algo"></i>3×4 = 12</td><td><i class="dot batch"></i>0 mm</td><td><i class="dot excel"></i>100</td><td>JOB-0001</td><td><i class="dot excel"></i>01</td></tr>
+        <tr><td class="sticky file">B-2030.pdf</td><td class="sticky status"><span class="tag w">2 项覆盖</span></td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td><i class="dot batch"></i>圆角矩形</td><td><i class="dot batch"></i>R5</td><td class="warncell"><i class="dot manual"></i>手动 90°</td><td class="warncell"><i class="dot manual"></i>折手</td><td class="algocell"><i class="dot algo"></i>2×4 = 8</td><td><i class="dot batch"></i>0 mm</td><td><i class="dot excel"></i>80</td><td>JOB-0002</td><td><i class="dot excel"></i>02</td></tr>
+        <tr><td class="sticky file">C-0088.pdf</td><td class="sticky status"><span class="tag e">无法排版</span></td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td class="warncell"><i class="dot manual"></i>异形模板</td><td class="warncell"><i class="dot manual"></i>最后 1 页</td><td><i class="dot batch"></i>自动</td><td><i class="dot batch"></i>连拼</td><td class="badcell">尺寸超出材料宽度</td><td><i class="dot batch"></i>0 mm</td><td><i class="dot excel"></i>50</td><td>JOB-0003</td><td><i class="dot excel"></i>03</td></tr>
+        <tr><td class="sticky file">D-7780 / 明细 1</td><td class="sticky status"><span class="tag w">Excel 展开</span></td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td><i class="dot batch"></i>圆角矩形</td><td><i class="dot batch"></i>R5</td><td><i class="dot batch"></i>自动</td><td><i class="dot batch"></i>连拼</td><td class="algocell"><i class="dot algo"></i>3×4 = 12</td><td><i class="dot batch"></i>0 mm</td><td class="warncell"><i class="dot excel"></i>120</td><td>JOB-0004</td><td class="warncell"><i class="dot excel"></i>A01</td></tr>
+        <tr><td class="sticky file">D-7780 / 明细 2</td><td class="sticky status"><span class="tag w">Excel 展开</span></td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td><i class="dot batch"></i>圆角矩形</td><td><i class="dot batch"></i>R5</td><td><i class="dot batch"></i>自动</td><td><i class="dot batch"></i>连拼</td><td class="algocell"><i class="dot algo"></i>3×4 = 12</td><td><i class="dot batch"></i>0 mm</td><td class="warncell"><i class="dot excel"></i>60</td><td>JOB-0004</td><td class="warncell"><i class="dot excel"></i>A02</td></tr>
+        <tr><td class="sticky file">E-0099.pdf</td><td class="sticky status"><span class="tag e">序号缺失</span></td><td><i class="dot batch"></i>白胶车贴</td><td><i class="dot batch"></i>卷材 1350</td><td><i class="dot batch"></i>2 mm</td><td><i class="dot batch"></i>圆角矩形</td><td><i class="dot batch"></i>R5</td><td><i class="dot batch"></i>自动</td><td><i class="dot batch"></i>连拼</td><td class="algocell"><i class="dot algo"></i>3×4 = 12</td><td><i class="dot batch"></i>0 mm</td><td><i class="dot excel"></i>70</td><td>JOB-0005</td><td class="badcell">Excel 未返回</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="legend"><span><i class="dot batch"></i>批次继承</span><span><i class="dot manual"></i>单文件人工覆盖</span><span><i class="dot excel"></i>Excel 返回</span><span><i class="dot algo"></i>算法计算</span><span>黄色 = 有意差异，红色 = 必须修正</span></div>
+  <div class="foot"><span class="muted">双击任意单元格才打开该文件详情；正常情况下只需检查这张矩阵。</span><span><span class="btn">导出审计清单</span><span class="btn primary">修正 2 个错误</span></span></div>
+</div>
+
+<div class="note"><b>核心规则</b>矩阵显示的是“最终有效值”，不是设置过程。列按「业务数据 / PDF 处理 / 输出结果」分组，减少横向宽度；“仅看差异与错误”默认开启，因此几十或几百个文件也无需逐个点击。</div>
+
+<div class="options" style="margin-top:18px">
+  <div class="option" data-choice="audit-matrix-approve" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>采用批次审计矩阵（推荐）</h3><p>主界面直接检查全批次最终参数，单文件详情仅用于修正。</p></div></div>
+  <div class="option" data-choice="audit-matrix-adjust" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>继续调整信息密度</h3><p>保留审计逻辑，但进一步减少列或改为上下两层表格。</p></div></div>
+</div>

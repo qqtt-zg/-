@@ -1,0 +1,60 @@
+<style>
+  .app{border:1px solid #cbd5e1;border-radius:14px;overflow:hidden;background:#f8fafc;color:#1e293b;font-size:12px}.head{padding:10px 14px;background:#e9eef5;border-bottom:1px solid #cbd5e1;font-weight:700}.grid{display:grid;grid-template-columns:minmax(560px,1fr) 390px;min-height:540px}.files{padding:12px;border-right:1px solid #cbd5e1}.inspector{background:white;padding:12px}.tabs{display:flex;border-bottom:1px solid #cbd5e1;margin-bottom:10px}.tab{padding:8px 11px}.tab.on{color:#1677ff;border-bottom:3px solid #1677ff;font-weight:700}
+  table{width:100%;border-collapse:collapse;background:white}th,td{padding:7px;border:1px solid #dbe2ea;text-align:left}th{background:#eef2f7}.selected td{background:#eaf4ff;border-color:#91caff}.pill{padding:2px 6px;border-radius:9px;font-size:10px}.batch{background:#e6f4ff;color:#0958d9}.manual{background:#fff1b8;color:#ad6800}.excel{background:#d9f7be;color:#237804}.algo{background:#f0f0f0;color:#434343}
+  .filehead{padding:10px;border:1px solid #91caff;background:#f0f7ff;border-radius:9px;margin-bottom:10px}.filehead b{font-size:14px}.muted{color:#64748b}.section{border:1px solid #dbe2ea;border-radius:9px;margin-bottom:8px;overflow:hidden}.st{padding:7px 9px;background:#f1f5f9;font-weight:700}.row{display:grid;grid-template-columns:115px 1fr 82px;gap:7px;padding:7px 9px;border-top:1px solid #edf1f5;align-items:center}.row:first-of-type{border-top:0}.value{font-weight:600}.changed{background:#fffbe6}.bar{display:flex;gap:7px;padding-top:8px}.btn{padding:6px 9px;border:1px solid #94a3b8;border-radius:6px;background:white}.primary{background:#1677ff;color:white;border-color:#1677ff}.hint{margin-top:14px;padding:10px;border-left:4px solid #1677ff;background:#f0f7ff;border-radius:7px}
+  @media(max-width:1000px){.grid{grid-template-columns:1fr}.inspector{border-top:1px solid #cbd5e1}}
+</style>
+
+<h2>单文件参数如何查看？</h2>
+<p class="subtitle">点击文件行后，右侧从“批次设置”切换为“当前文件检查器”。默认展示最终生效值，不要求用户自行推算继承关系。</p>
+
+<div class="app">
+  <div class="head">批量 PDF 处理　›　文件参数检查</div>
+  <div class="grid">
+    <div class="files">
+      <table>
+        <thead><tr><th>文件</th><th>数量</th><th>订单号</th><th>序号</th><th>参数状态</th><th>预检</th></tr></thead>
+        <tbody>
+          <tr><td>A-1001.pdf</td><td>100</td><td>JOB-0001</td><td>01</td><td><span class="pill batch">全部继承</span></td><td>✓</td></tr>
+          <tr class="selected"><td><b>B-2030.pdf</b></td><td>80</td><td>JOB-0002</td><td>02</td><td><span class="pill manual">2 项覆盖</span></td><td>✓</td></tr>
+          <tr><td>C-0088.pdf</td><td>50</td><td>JOB-0003</td><td>03</td><td><span class="pill batch">全部继承</span></td><td>!</td></tr>
+        </tbody>
+      </table>
+      <div class="hint"><b>选择行为</b><br>单选一行：右侧查看该文件。多选多行：右侧切换成“批量应用”模式，不混淆单文件详情。</div>
+    </div>
+
+    <div class="inspector">
+      <div class="tabs"><div class="tab">批次设置</div><div class="tab on">当前文件</div></div>
+      <div class="filehead"><b>B-2030.pdf</b><br><span class="muted">继承批次设置 · 2 项手工覆盖 · 预检通过</span></div>
+      <div class="tabs"><div class="tab on">有效参数</div><div class="tab">仅看覆盖项 (2)</div><div class="tab">预检结果</div></div>
+
+      <div class="section">
+        <div class="st">业务数据</div>
+        <div class="row"><span>数量</span><span class="value">80</span><span class="pill excel">Excel</span></div>
+        <div class="row"><span>订单号</span><span class="value">JOB-0002</span><span class="pill algo">列表序列</span></div>
+        <div class="row"><span>序号</span><span class="value">02</span><span class="pill excel">Excel</span></div>
+      </div>
+      <div class="section">
+        <div class="st">PDF 处理参数</div>
+        <div class="row"><span>材料 / 出血</span><span class="value">白胶车贴 / 2mm</span><span class="pill batch">批次</span></div>
+        <div class="row"><span>形状</span><span class="value">圆角矩形 R5</span><span class="pill batch">批次</span></div>
+        <div class="row changed"><span>排版状态</span><span class="value">连拼</span><span class="pill manual">手工覆盖</span></div>
+        <div class="row"><span>布局数量</span><span class="value">2×4 = 8</span><span class="pill algo">算法</span></div>
+        <div class="row changed"><span>旋转</span><span class="value">手动 90°</span><span class="pill manual">手工覆盖</span></div>
+        <div class="row"><span>一式</span><span class="value">2 联 · 自适应列</span><span class="pill batch">批次</span></div>
+        <div class="row"><span>间距</span><span class="value">0 mm</span><span class="pill batch">批次</span></div>
+      </div>
+      <div class="section">
+        <div class="st">输出</div>
+        <div class="row"><span>输出方式</span><span class="value">复制（源文件保留）</span><span class="pill batch">固定</span></div>
+        <div class="row"><span>输出文件名</span><span class="value">JOB-0002_02_80.pdf</span><span class="pill algo">生成</span></div>
+      </div>
+      <div class="bar"><span class="btn primary">单独设置</span><span class="btn">恢复全部批次设置</span><span class="btn">复制参数到选中文件</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:18px">
+  <div class="option" data-choice="inspector-approve" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>采用当前文件检查器</h3><p>有效参数、覆盖差异、预检结果三种视图。</p></div></div>
+  <div class="option" data-choice="inspector-dialog" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>改为双击弹窗查看</h3><p>列表占用空间更大，但查看需要额外弹窗。</p></div></div>
+</div>

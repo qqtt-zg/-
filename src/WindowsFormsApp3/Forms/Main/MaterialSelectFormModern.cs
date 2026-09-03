@@ -221,6 +221,57 @@ namespace WindowsFormsApp3
         private System.Windows.Forms.ContextMenuStrip _presetContextMenu;
         private string _currentPresetName = "";
 
+        // 订单号模式与二级正则配置
+        private readonly Dictionary<string, string> _orderRegexDict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private OrderNumberMode _currentOrderNumberMode = OrderNumberMode.None;
+        private string _selectedOrderRegexName = "";
+        private string _selectedOrderRegexPattern = "";
+
+
+        private System.Windows.Forms.ContextMenuStrip _orderNumberModeMenu;
+        private System.Windows.Forms.ToolStripMenuItem _miModeNone;
+        private System.Windows.Forms.ToolStripMenuItem _miModeAutoInc;
+        private System.Windows.Forms.ToolStripMenuItem _miModeRegex;
+
+        private static void SetControlBoundsSafe(Control ctrl, int x, int y, int width, int height)
+        {
+            if (ctrl == null) return;
+            if (ctrl.Left != x || ctrl.Top != y || ctrl.Width != width || ctrl.Height != height)
+            {
+                ctrl.SetBounds(x, y, width, height);
+            }
+        }
+
+        // 左侧批量文件列表面板
+        private System.Windows.Forms.Panel pnlFileList;
+        private System.Windows.Forms.DataGridView dgvBatchFiles;
+        private System.Windows.Forms.ContextMenuStrip _batchContextMenu;
+        private Rectangle _dragBoxFromMouseDown;
+        private int _rowIndexFromMouseDown = -1;
+        private AntdUI.Button btnMoveUp;
+        private AntdUI.Button btnMoveDown;
+        private AntdUI.Button btnSortAsc;
+        private AntdUI.Button btnSortDesc;
+        private AntdUI.Label lblBatchTitle;
+        private System.Windows.Forms.Label lblBatchHelp;
+        private BindingList<BatchFileItem> _batchItems = new BindingList<BatchFileItem>();
+        private bool _isBatchPanelExpanded = false;
+        private const int BATCH_PANEL_WIDTH = 420;
+
+        public bool IsApplyToAll { get; private set; } = false;
+        public List<BatchFileItem> BatchFileItems => _batchItems.ToList();
+        public OrderNumberMode CurrentOrderNumberMode => _currentOrderNumberMode;
+        public string SelectedOrderRegexName => _selectedOrderRegexName;
+        public string SelectedOrderRegexPattern => _selectedOrderRegexPattern;
+        public System.Windows.Forms.ContextMenuStrip OrderNumberModeMenu => _orderNumberModeMenu;
+        public AntdUI.Button BtnOrderNumberMode => btnOrderNumberMode;
+
+        // 本次材料选择使用的临时排版参数，不回写全局自动排版设置。
+        private TemporaryImpositionParameters _temporaryImpositionParameters;
+        private AntdUI.Input _rowsInput;
+        private AntdUI.Input _columnsInput;
+        private bool _isUpdatingLayoutInputs;
+
         // 配置数据结构
         public class ExportFolderConfig
         {
@@ -288,6 +339,10 @@ namespace WindowsFormsApp3
             // 使用设计器中的窗口尺寸，不再动态调整大小
             LoadMaterials();
 
+            // 初始化订单号模式与批量列表面板
+            InitializeOrderNumberControls();
+            InitializeBatchFileListPanel();
+
             // 初始化预设右键菜单
             InitializePresetContextMenu();
 
@@ -334,6 +389,8 @@ namespace WindowsFormsApp3
                 int savedX = AppSettings.MaterialFormX;
                 int savedY = AppSettings.MaterialFormY;
                 int savedWidth = AppSettings.MaterialFormWidth;
+                if (savedWidth > 450) savedWidth = 400;
+                if (savedWidth > 450) savedWidth = 400;
                 int savedHeight = AppSettings.MaterialFormHeight;
                 bool savedMaximized = AppSettings.MaterialFormMaximized;
 
@@ -682,6 +739,8 @@ namespace WindowsFormsApp3
                 rotationDisplayLabel.Click += RotationDisplayLabel_Click;
             }
 
+            InitializeLayoutInputs();
+
             // 文件名标签拖动事件
             if (fileNameLabel != null)
             {
@@ -691,6 +750,129 @@ namespace WindowsFormsApp3
                 // 添加 SizeChanged 事件处理,当控件大小变化时自动调整字体
                 fileNameLabel.SizeChanged += (s, e) => AutoResizeLabelFont(fileNameLabel);
             }
+        }
+
+        /// <summary>
+        /// 以可编辑输入框替换原有的行列结果标签。输入为空或 0 时表示自动。
+        /// </summary>
+        private void InitializeLayoutInputs()
+        {
+            if (_rowsInput != null || rowsDisplayLabel == null || columnsDisplayLabel == null)
+            {
+                return;
+            }
+
+            _rowsInput = new AntdUI.Input
+            {
+                Name = "rowsInput",
+                Location = rowsDisplayLabel.Location,
+                Size = new Size(68, rowsDisplayLabel.Height),
+                Font = rowsDisplayLabel.Font,
+                ForeColor = rowsDisplayLabel.ForeColor,
+                PlaceholderColor = rowsDisplayLabel.ForeColor,
+                PlaceholderText = "行(自动)",
+                BorderWidth = 0F,
+                WaveSize = 0,
+                BorderColor = Color.Transparent,
+                BorderHover = Color.Transparent,
+                BorderActive = Color.Transparent,
+                BackColor = Color.Transparent
+            };
+            _columnsInput = new AntdUI.Input
+            {
+                Name = "columnsInput",
+                Location = columnsDisplayLabel.Location,
+                Size = new Size(68, columnsDisplayLabel.Height),
+                Font = columnsDisplayLabel.Font,
+                ForeColor = columnsDisplayLabel.ForeColor,
+                PlaceholderColor = columnsDisplayLabel.ForeColor,
+                PlaceholderText = "列(自动)",
+                BorderWidth = 0F,
+                WaveSize = 0,
+                BorderColor = Color.Transparent,
+                BorderHover = Color.Transparent,
+                BorderActive = Color.Transparent,
+                BackColor = Color.Transparent
+            };
+
+            _rowsInput.TextChanged += LayoutInput_TextChanged;
+            _columnsInput.TextChanged += LayoutInput_TextChanged;
+            rowsDisplayLabel.Visible = false;
+            columnsDisplayLabel.Visible = false;
+            Controls.Add(_rowsInput);
+            Controls.Add(_columnsInput);
+            _rowsInput.BringToFront();
+            _columnsInput.BringToFront();
+
+            if (_temporaryImpositionParameters != null)
+            {
+                _isUpdatingLayoutInputs = true;
+                if (_temporaryImpositionParameters.RequestedRows > 0)
+                    _rowsInput.Text = _temporaryImpositionParameters.RequestedRows.ToString();
+                if (_temporaryImpositionParameters.RequestedColumns > 0)
+                    _columnsInput.Text = _temporaryImpositionParameters.RequestedColumns.ToString();
+                _isUpdatingLayoutInputs = false;
+            }
+
+            if (_currentImpositionResult != null)
+            {
+                UpdateLayoutInputsDisplay(_currentImpositionResult.Rows, _currentImpositionResult.Columns);
+            }
+        }
+
+        private void UpdateLayoutInputsDisplay(int autoRows, int autoColumns)
+        {
+            if (_rowsInput != null && string.IsNullOrWhiteSpace(_rowsInput.Text))
+            {
+                _rowsInput.PlaceholderText = autoRows > 0 ? $"{autoRows}行(自动)" : "行(自动)";
+            }
+
+            if (_columnsInput != null && string.IsNullOrWhiteSpace(_columnsInput.Text))
+            {
+                _columnsInput.PlaceholderText = autoColumns > 0 ? $"{autoColumns}列(自动)" : "列(自动)";
+            }
+        }
+
+        private void UpdateLayoutInputsStatus(string status)
+        {
+            if (_rowsInput != null && string.IsNullOrWhiteSpace(_rowsInput.Text))
+            {
+                _rowsInput.PlaceholderText = status == "计算中..." ? "行(计算中)" : "行(自动)";
+            }
+
+            if (_columnsInput != null && string.IsNullOrWhiteSpace(_columnsInput.Text))
+            {
+                _columnsInput.PlaceholderText = status == "计算中..." ? "列(计算中)" : "列(自动)";
+            }
+        }
+
+        private void LayoutInput_TextChanged(object sender, EventArgs e)
+        {
+            if (_isUpdatingLayoutInputs)
+            {
+                return;
+            }
+
+            if (!TryGetLayoutInputValue(_rowsInput, out var rows) || !TryGetLayoutInputValue(_columnsInput, out var columns))
+            {
+                return;
+            }
+
+            EnsureTemporaryImpositionParameters();
+            _temporaryImpositionParameters.RequestedRows = rows;
+            _temporaryImpositionParameters.RequestedColumns = columns;
+            OnImpositionSettingsChanged(sender, e);
+        }
+
+        private static bool TryGetLayoutInputValue(AntdUI.Input input, out int value)
+        {
+            value = 0;
+            if (input == null || string.IsNullOrWhiteSpace(input.Text))
+            {
+                return true;
+            }
+
+            return int.TryParse(input.Text, out value) && value >= 0 && value <= 8;
         }
 
         // 兼容Form1.cs调用的构造函数
@@ -781,6 +963,10 @@ namespace WindowsFormsApp3
             SetCurrentFileName(fileName);
 
             LoadMaterials();
+
+            // 初始化订单号模式与批量列表面板
+            InitializeOrderNumberControls();
+            InitializeBatchFileListPanel();
 
             // 初始化预设右键菜单
             InitializePresetContextMenu();
@@ -1932,13 +2118,8 @@ namespace WindowsFormsApp3
                     }
                 }
 
-                // 恢复自动递增状态 - 使用与现有逻辑相同的设置键
-                bool autoIncrementState = AppSettings.GetValue<bool>("AutoIncrementOrderNumber1");
-                if (autoIncrementCheckbox != null)
-                {
-                    autoIncrementCheckbox.Checked = autoIncrementState;
-                    LogHelper.Debug($"恢复自动递增状态: {autoIncrementState}");
-                }
+                // 恢复订单号模式状态
+                RestoreOrderNumberModeState();
 
                 // 恢复颜色模式（使用统一的属性访问器）
                 string lastColorMode = AppSettings.LastColorMode;
@@ -2306,6 +2487,9 @@ namespace WindowsFormsApp3
             {
                 if (ValidateForm())
                 {
+                    // 若左侧待处理列表处于打开状态，点击确认即执行批量处理；折叠时为单文件确认
+                    IsApplyToAll = _isBatchPanelExpanded;
+
                     // 保存所有数据到属性
                     SaveFormData();
 
@@ -2673,7 +2857,9 @@ namespace WindowsFormsApp3
                 ["FixedField"] = FixedField,
                 ["Dimensions"] = dimensionsTextBox?.Text ?? "",
                 ["Bleed"] = bleedDropdown?.Text ?? "",
-                ["AutoIncrement"] = autoIncrementCheckbox?.Checked ?? false
+                ["OrderNumberMode"] = _currentOrderNumberMode.ToString(),
+                ["SelectedOrderRegexName"] = _selectedOrderRegexName,
+                ["SelectedOrderRegexPattern"] = _selectedOrderRegexPattern
             };
 
             return formData;
@@ -3065,23 +3251,1336 @@ namespace WindowsFormsApp3
             AutoFillSerialNumber();
         }
 
-        private void autoIncrementCheckbox_CheckedChanged(object sender, EventArgs e)
+        #region 订单号模式与正则二级选择逻辑
+
+        /// <summary>
+        /// 加载已配置的正则表达式字典（若无则加载默认预设）
+        /// </summary>
+        private void LoadOrderRegexDictionary()
         {
             try
             {
-                if (autoIncrementCheckbox != null)
+                _orderRegexDict.Clear();
+                string rawPatterns = AppSettings.RegexPatterns;
+                if (!string.IsNullOrEmpty(rawPatterns))
                 {
-                    // 使用与现有自动递增逻辑相同的设置键
-                    AppSettings.Set("AutoIncrementOrderNumber1", autoIncrementCheckbox.Checked);
-                    AppSettings.Save();
-                    LogHelper.Debug($"保存自动递增状态: {autoIncrementCheckbox.Checked}");
+                    string[] patterns = rawPatterns.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var p in patterns)
+                    {
+                        var parts = p.Split('=');
+                        if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !_orderRegexDict.ContainsKey(parts[0]))
+                        {
+                            _orderRegexDict[parts[0]] = parts[1];
+                        }
+                    }
+                }
+
+                // 若无预设正则，提供常用默认规则
+                if (_orderRegexDict.Count == 0)
+                {
+                    _orderRegexDict["订单号_PO数字"] = @"PO\d+";
+                    _orderRegexDict["订单号_6位及以上数字"] = @"\d{6,}";
+                    _orderRegexDict["订单号_带横杠"] = @"[A-Z0-9]+-[A-Z0-9]+";
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.Error($"保存自动递增状态失败: {ex.Message}", ex);
+                LogHelper.Error($"[MaterialSelectFormModern] 加载正则字典失败: {ex.Message}", ex);
             }
         }
+
+        /// <summary>
+        /// 构建订单号模式与正则子菜单
+        /// </summary>
+        public void BuildOrderNumberModeMenu()
+        {
+            try
+            {
+                LoadOrderRegexDictionary();
+
+                if (_orderNumberModeMenu == null)
+                {
+                    _orderNumberModeMenu = components != null
+                        ? new System.Windows.Forms.ContextMenuStrip(components)
+                        : new System.Windows.Forms.ContextMenuStrip();
+                }
+
+                _orderNumberModeMenu.Items.Clear();
+
+                _miModeNone = new System.Windows.Forms.ToolStripMenuItem("无", null, (s, e) => SelectOrderNumberMode(OrderNumberMode.None))
+                {
+                    Checked = (_currentOrderNumberMode == OrderNumberMode.None)
+                };
+
+                _miModeAutoInc = new System.Windows.Forms.ToolStripMenuItem("自动递增", null, (s, e) => SelectOrderNumberMode(OrderNumberMode.AutoIncrement))
+                {
+                    Checked = (_currentOrderNumberMode == OrderNumberMode.AutoIncrement)
+                };
+
+                _miModeRegex = new System.Windows.Forms.ToolStripMenuItem("正则提取")
+                {
+                    Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction)
+                };
+
+                // 添加二级正则子菜单
+                foreach (var kvp in _orderRegexDict)
+                {
+                    string ruleName = kvp.Key;
+                    string pattern = kvp.Value;
+                    var subItem = new System.Windows.Forms.ToolStripMenuItem(ruleName, null, (s, e) => SelectOrderRegexRule(ruleName, pattern))
+                    {
+                        ToolTipText = pattern,
+                        Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction &&
+                                   string.Equals(_selectedOrderRegexName, ruleName, StringComparison.OrdinalIgnoreCase))
+                    };
+                    _miModeRegex.DropDownItems.Add(subItem);
+                }
+
+                _orderNumberModeMenu.Items.Add(_miModeNone);
+                _orderNumberModeMenu.Items.Add(_miModeAutoInc);
+                _orderNumberModeMenu.Items.Add(_miModeRegex);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 构建订单号模式菜单失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 初始化订单号模式按钮与菜单
+        /// </summary>
+        private void InitializeOrderNumberControls()
+        {
+            try
+            {
+                LoadOrderRegexDictionary();
+                BuildOrderNumberModeMenu();
+                RestoreOrderNumberModeState();
+                UpdateOrderNumberControlsLayout();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 初始化订单号控件失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 恢复订单号模式与正则配置状态
+        /// </summary>
+        private void RestoreOrderNumberModeState()
+        {
+            try
+            {
+                LoadOrderRegexDictionary();
+
+                string savedMode = AppSettings.GetValue<string>("OrderNumberMode1");
+                if (string.IsNullOrEmpty(savedMode))
+                {
+                    bool legacyAutoInc = AppSettings.GetValue<bool>("AutoIncrementOrderNumber1");
+                    savedMode = legacyAutoInc ? "自动递增" : "无";
+                }
+                else
+                {
+                    if (savedMode == "True" || savedMode == "AutoIncrement" || savedMode == "1") savedMode = "自动递增";
+                    else if (savedMode == "False" || savedMode == "None" || savedMode == "0") savedMode = "无";
+                    else if (savedMode == "RegexExtraction" || savedMode == "Regex" || savedMode == "2") savedMode = "正则提取";
+                }
+
+                string lastRegexName = AppSettings.LastSelectedRegex;
+                if (string.IsNullOrEmpty(lastRegexName) || !_orderRegexDict.ContainsKey(lastRegexName))
+                {
+                    lastRegexName = AppSettings.GetValue<string>("LastSelectedOrderRegexName");
+                }
+                if ((string.IsNullOrEmpty(lastRegexName) || !_orderRegexDict.ContainsKey(lastRegexName)) && _orderRegexDict.Count > 0)
+                {
+                    lastRegexName = _orderRegexDict.Keys.First();
+                }
+
+                if (savedMode == "正则提取")
+                {
+                    _currentOrderNumberMode = OrderNumberMode.RegexExtraction;
+                    if (!string.IsNullOrEmpty(lastRegexName) && _orderRegexDict.TryGetValue(lastRegexName, out string pattern))
+                    {
+                        _selectedOrderRegexName = lastRegexName;
+                        _selectedOrderRegexPattern = pattern;
+                    }
+                    else if (_orderRegexDict.Count > 0)
+                    {
+                        var first = _orderRegexDict.First();
+                        _selectedOrderRegexName = first.Key;
+                        _selectedOrderRegexPattern = first.Value;
+                    }
+                    ApplyRegexOrderExtraction();
+                }
+                else if (savedMode == "自动递增")
+                {
+                    _currentOrderNumberMode = OrderNumberMode.AutoIncrement;
+                    if (!string.IsNullOrEmpty(lastRegexName) && _orderRegexDict.TryGetValue(lastRegexName, out string pattern))
+                    {
+                        _selectedOrderRegexName = lastRegexName;
+                        _selectedOrderRegexPattern = pattern;
+                    }
+                    else if (_orderRegexDict.Count > 0)
+                    {
+                        var first = _orderRegexDict.First();
+                        _selectedOrderRegexName = first.Key;
+                        _selectedOrderRegexPattern = first.Value;
+                    }
+                }
+                else
+                {
+                    _currentOrderNumberMode = OrderNumberMode.None;
+                    if (!string.IsNullOrEmpty(lastRegexName) && _orderRegexDict.TryGetValue(lastRegexName, out string pattern))
+                    {
+                        _selectedOrderRegexName = lastRegexName;
+                        _selectedOrderRegexPattern = pattern;
+                    }
+                    else if (_orderRegexDict.Count > 0)
+                    {
+                        var first = _orderRegexDict.First();
+                        _selectedOrderRegexName = first.Key;
+                        _selectedOrderRegexPattern = first.Value;
+                    }
+                }
+
+                UpdateOrderModeButtonDisplay();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 恢复订单号模式状态失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 切换订单号模式
+        /// </summary>
+        public void SelectOrderNumberMode(OrderNumberMode mode)
+        {
+            _currentOrderNumberMode = mode;
+
+            if (mode == OrderNumberMode.None)
+            {
+                AppSettings.Set("OrderNumberMode1", "无");
+                AppSettings.Set("AutoIncrementOrderNumber1", false);
+                UpdateOrderModeButtonDisplay();
+                UpdateBatchOrderNumbers();
+            }
+            else if (mode == OrderNumberMode.AutoIncrement)
+            {
+                AppSettings.Set("OrderNumberMode1", "自动递增");
+                AppSettings.Set("AutoIncrementOrderNumber1", true);
+                UpdateOrderModeButtonDisplay();
+                UpdateBatchOrderNumbers();
+            }
+            else if (mode == OrderNumberMode.RegexExtraction)
+            {
+                if (string.IsNullOrEmpty(_selectedOrderRegexName) || !_orderRegexDict.ContainsKey(_selectedOrderRegexName))
+                {
+                    if (_orderRegexDict.Count > 0)
+                    {
+                        var first = _orderRegexDict.First();
+                        _selectedOrderRegexName = first.Key;
+                        _selectedOrderRegexPattern = first.Value;
+                    }
+                }
+                SelectOrderRegexRule(_selectedOrderRegexName, _selectedOrderRegexPattern);
+            }
+        }
+
+        /// <summary>
+        /// 选择具体正则提取规则
+        /// </summary>
+        public void SelectOrderRegexRule(string regexName, string pattern)
+        {
+            _currentOrderNumberMode = OrderNumberMode.RegexExtraction;
+            _selectedOrderRegexName = regexName;
+            _selectedOrderRegexPattern = pattern;
+
+            AppSettings.Set("OrderNumberMode1", "正则提取");
+            AppSettings.Set("AutoIncrementOrderNumber1", false);
+            AppSettings.Set("LastSelectedOrderRegexName", regexName);
+            AppSettings.LastSelectedRegex = regexName;
+            AppSettings.Save();
+
+            UpdateOrderModeButtonDisplay();
+            ApplyRegexOrderExtraction();
+        }
+
+        /// <summary>
+        /// 更新订单号模式按钮显示文本及菜单勾选状态
+        /// </summary>
+        private void UpdateOrderModeButtonDisplay()
+        {
+            if (btnOrderNumberMode != null)
+            {
+                switch (_currentOrderNumberMode)
+                {
+                    case OrderNumberMode.AutoIncrement:
+                        btnOrderNumberMode.Text = "自动递增 ▾";
+                        break;
+                    case OrderNumberMode.RegexExtraction:
+                        string regexDisplayName = !string.IsNullOrWhiteSpace(_selectedOrderRegexName)
+                            ? _selectedOrderRegexName
+                            : "正则提取";
+                        btnOrderNumberMode.Text = $"{regexDisplayName} ▾";
+                        break;
+                    case OrderNumberMode.None:
+                    default:
+                        btnOrderNumberMode.Text = "无 ▾";
+                        break;
+                }
+            }
+            UpdateOrderNumberModeMenuChecks();
+        }
+
+        /// <summary>
+        /// 更新菜单与子菜单的勾选状态
+        /// </summary>
+        private void UpdateOrderNumberModeMenuChecks()
+        {
+            if (_miModeNone != null)
+                _miModeNone.Checked = (_currentOrderNumberMode == OrderNumberMode.None);
+            if (_miModeAutoInc != null)
+                _miModeAutoInc.Checked = (_currentOrderNumberMode == OrderNumberMode.AutoIncrement);
+            if (_miModeRegex != null)
+            {
+                _miModeRegex.Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction);
+                foreach (System.Windows.Forms.ToolStripItem item in _miModeRegex.DropDownItems)
+                {
+                    if (item is System.Windows.Forms.ToolStripMenuItem subMenuItem)
+                    {
+                        subMenuItem.Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction &&
+                                               string.Equals(subMenuItem.Text, _selectedOrderRegexName, StringComparison.OrdinalIgnoreCase));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 点击模式选择按钮时弹出上下文子菜单
+        /// </summary>
+        private void btnOrderNumberMode_Click(object sender, EventArgs e)
+        {
+            BuildOrderNumberModeMenu();
+            _orderNumberModeMenu?.Show(btnOrderNumberMode, new Point(0, btnOrderNumberMode.Height));
+        }
+
+        /// <summary>
+        /// 动态调整订单号区域控件布局
+        /// </summary>
+        private void UpdateOrderNumberControlsLayout()
+        {
+            try
+            {
+                int baseTop = 329;
+                int labelTop = 333;
+
+                if (orderNumberLabel != null)
+                {
+                    orderNumberLabel.Text = "订单号:";
+                    SetControlBoundsSafe(orderNumberLabel, 150, labelTop, 42, 25);
+                }
+
+                if (orderNumberTextBox != null)
+                {
+                    SetControlBoundsSafe(orderNumberTextBox, 197, baseTop, 98, 32);
+                }
+
+                if (btnOrderNumberMode != null)
+                {
+                    SetControlBoundsSafe(btnOrderNumberMode, 300, baseTop, 82, 32);
+                    btnOrderNumberMode.BringToFront();
+                }
+
+                UpdateOrderModeButtonDisplay();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 更新订单号布局失败: {ex.Message}", ex);
+            }
+        }
+        
+        /// <summary>
+        /// 使用选定的正则规则提取当前文件及批量列表中的订单号
+        /// </summary>
+        private void ApplyRegexOrderExtraction()
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(_selectedOrderRegexPattern))
+                {
+                    // 提取当前文件订单号
+                    string extracted = ExtractOrderNumberByRegex(CurrentFileName, _selectedOrderRegexPattern);
+                    if (!string.IsNullOrEmpty(extracted))
+                    {
+                        if (orderNumberTextBox != null)
+                        {
+                            orderNumberTextBox.Text = extracted;
+                        }
+                        OrderNumber = extracted;
+                    }
+
+                    // 刷新批量列表
+                    UpdateBatchOrderNumbers();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 应用正则提取失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 正则提取订单号辅助方法（与主界面 ExtractRegexResult 保持一致，以带扩展名的文件名进行匹配）
+        /// </summary>
+        public static string ExtractOrderNumberByRegex(string fileName, string pattern)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(pattern))
+                return "";
+
+            // 统一以包含扩展名的完整文件名作为目标字符串（与主界面完全一致）
+            string targetName = Path.GetFileName(fileName);
+            try
+            {
+                var match = Regex.Match(targetName, pattern, RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    if (match.Groups["order"].Success)
+                        return match.Groups["order"].Value;
+                    if (match.Groups.Count > 1 && match.Groups[1].Success)
+                        return match.Groups[1].Value;
+                    return match.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[ExtractOrderNumberByRegex] 正则提取异常: {ex.Message}");
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// 订单号递增计算辅助方法
+        /// </summary>
+        public static string CalculateIncrementalOrderNumber(string baseOrderNumber, int offsetIndex)
+        {
+            if (string.IsNullOrWhiteSpace(baseOrderNumber) || offsetIndex <= 0)
+                return baseOrderNumber ?? "";
+
+            Match match = Regex.Match(baseOrderNumber, @"(.*?)(\d+)$");
+            if (match.Success)
+            {
+                string prefix = match.Groups[1].Value;
+                string numberStr = match.Groups[2].Value;
+                if (long.TryParse(numberStr, out long number))
+                {
+                    long newNumber = number + offsetIndex;
+                    return prefix + newNumber.ToString().PadLeft(numberStr.Length, '0');
+                }
+            }
+
+            return $"{baseOrderNumber}_{offsetIndex + 1}";
+        }
+
+        /// <summary>
+        /// 刷新批量列表中所有文件的预览订单号
+        /// </summary>
+        private void UpdateBatchOrderNumbers()
+        {
+            try
+            {
+                if (_batchItems == null || _batchItems.Count == 0) return;
+
+                string baseOrder = orderNumberTextBox?.Text ?? "";
+
+                for (int i = 0; i < _batchItems.Count; i++)
+                {
+                    var item = _batchItems[i];
+                    item.Index = i + 1;
+
+                    if (_currentOrderNumberMode == OrderNumberMode.RegexExtraction)
+                    {
+                        if (!string.IsNullOrEmpty(_selectedOrderRegexPattern))
+                        {
+                            item.OrderNumber = ExtractOrderNumberByRegex(item.FileName, _selectedOrderRegexPattern);
+                        }
+                    }
+                    else if (_currentOrderNumberMode == OrderNumberMode.AutoIncrement)
+                    {
+                        item.OrderNumber = CalculateIncrementalOrderNumber(baseOrder, i);
+                    }
+                    else
+                    {
+                        item.OrderNumber = baseOrder;
+                    }
+                }
+
+                dgvBatchFiles?.Refresh();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 刷新批量订单号失败: {ex.Message}", ex);
+            }
+        }
+
+        #endregion
+
+        #region 左侧文件列表面板与批量处理逻辑
+
+        /// <summary>
+        /// 初始化左侧待处理文件列表面板
+        /// </summary>
+        private void InitializeBatchFileListPanel()
+        {
+            if (pnlFileList != null) return;
+
+            try
+            {
+                pnlFileList = new System.Windows.Forms.Panel
+                {
+                    Name = "pnlFileList",
+                    Location = new Point(0, 0),
+                    Size = new Size(BATCH_PANEL_WIDTH, this.ClientSize.Height),
+                    Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left,
+                    BackColor = Color.FromArgb(248, 249, 250),
+                    Visible = false
+                };
+
+                // 顶部工具栏
+                var toolbarPanel = new System.Windows.Forms.Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 40,
+                    BackColor = Color.FromArgb(240, 242, 245)
+                };
+
+                lblBatchTitle = new AntdUI.Label
+                {
+                    Text = "待处理文件列表",
+                    Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
+                    Location = new Point(10, 8),
+                    Size = new Size(130, 24)
+                };
+
+                btnMoveUp = new AntdUI.Button
+                {
+                    Text = "▲ 上移",
+                    Location = new Point(145, 6),
+                    Size = new Size(60, 28),
+                    Font = new Font("Microsoft YaHei UI", 8.5F),
+                    BorderWidth = 1F,
+                    WaveSize = 0
+                };
+                btnMoveUp.Click += BtnMoveUp_Click;
+
+                btnMoveDown = new AntdUI.Button
+                {
+                    Text = "▼ 下移",
+                    Location = new Point(210, 6),
+                    Size = new Size(60, 28),
+                    Font = new Font("Microsoft YaHei UI", 8.5F),
+                    BorderWidth = 1F,
+                    WaveSize = 0
+                };
+                btnMoveDown.Click += BtnMoveDown_Click;
+
+                btnSortAsc = new AntdUI.Button
+                {
+                    Text = "A-Z 升序",
+                    Location = new Point(275, 6),
+                    Size = new Size(68, 28),
+                    Font = new Font("Microsoft YaHei UI", 8.5F),
+                    BorderWidth = 1F,
+                    WaveSize = 0
+                };
+                btnSortAsc.Click += BtnSortAsc_Click;
+
+                btnSortDesc = new AntdUI.Button
+                {
+                    Text = "Z-A 降序",
+                    Location = new Point(347, 6),
+                    Size = new Size(68, 28),
+                    Font = new Font("Microsoft YaHei UI", 8.5F),
+                    BorderWidth = 1F,
+                    WaveSize = 0
+                };
+                btnSortDesc.Click += BtnSortDesc_Click;
+
+                toolbarPanel.Controls.Add(lblBatchTitle);
+                toolbarPanel.Controls.Add(btnMoveUp);
+                toolbarPanel.Controls.Add(btnMoveDown);
+                toolbarPanel.Controls.Add(btnSortAsc);
+                toolbarPanel.Controls.Add(btnSortDesc);
+
+                // 底部提示栏
+                var bottomHelpPanel = new System.Windows.Forms.Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 32,
+                    BackColor = Color.FromArgb(240, 242, 245)
+                };
+                lblBatchHelp = new System.Windows.Forms.Label
+                {
+                    Text = "💡 提示: 数量列可直接编辑；选中行按 Ctrl+V 批量向下粘贴多行数量",
+                    Font = new Font("Microsoft YaHei UI", 8F),
+                    ForeColor = Color.DimGray,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    Padding = new Padding(8, 0, 0, 0)
+                };
+                bottomHelpPanel.Controls.Add(lblBatchHelp);
+
+                // 表格 DataGridView
+                dgvBatchFiles = new System.Windows.Forms.DataGridView
+                {
+                    Dock = DockStyle.Fill,
+                    BackgroundColor = Color.White,
+                    BorderStyle = BorderStyle.None,
+                    RowHeadersVisible = false,
+                    AllowUserToAddRows = false,
+                    AllowUserToDeleteRows = false,
+                    AllowUserToResizeRows = false,
+                    AutoGenerateColumns = false,
+                    SelectionMode = DataGridViewSelectionMode.CellSelect,
+                    MultiSelect = true,
+                    Font = new Font("Microsoft YaHei UI", 9F),
+                    RowTemplate = { Height = 28 }
+                };
+
+                var colIndex = new DataGridViewTextBoxColumn
+                {
+                    DataPropertyName = "Index",
+                    HeaderText = "序号",
+                    Width = 45,
+                    ReadOnly = true,
+                    DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter }
+                };
+                var colFileName = new DataGridViewTextBoxColumn
+                {
+                    DataPropertyName = "FileName",
+                    HeaderText = "文件名",
+                    Width = 160,
+                    ReadOnly = true,
+                    AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill
+                };
+                var colOrder = new DataGridViewTextBoxColumn
+                {
+                    DataPropertyName = "OrderNumber",
+                    HeaderText = "预览订单号",
+                    Width = 95,
+                    ReadOnly = true
+                };
+                var colQty = new DataGridViewTextBoxColumn
+                {
+                    DataPropertyName = "Quantity",
+                    HeaderText = "数量",
+                    Width = 65,
+                    ReadOnly = false
+                };
+
+                dgvBatchFiles.Columns.Add(colIndex);
+                dgvBatchFiles.Columns.Add(colFileName);
+                dgvBatchFiles.Columns.Add(colOrder);
+                dgvBatchFiles.Columns.Add(colQty);
+
+                dgvBatchFiles.DataSource = _batchItems;
+                dgvBatchFiles.AllowDrop = true;
+                dgvBatchFiles.KeyDown += DgvBatchFiles_KeyDown;
+                dgvBatchFiles.MouseDown += DgvBatchFiles_MouseDown;
+                dgvBatchFiles.MouseMove += DgvBatchFiles_MouseMove;
+                dgvBatchFiles.DragOver += DgvBatchFiles_DragOver;
+                dgvBatchFiles.DragDrop += DgvBatchFiles_DragDrop;
+                dgvBatchFiles.CellMouseDown += DgvBatchFiles_CellMouseDown;
+
+                // 初始化左侧列表专属右键菜单
+                _batchContextMenu = new System.Windows.Forms.ContextMenuStrip();
+                var miPasteQty = new System.Windows.Forms.ToolStripMenuItem("从剪贴板批量粘贴数量", null, (s, e) =>
+                {
+                    PasteQuantitiesFromClipboard();
+                });
+                _batchContextMenu.Items.Add(miPasteQty);
+
+                pnlFileList.Controls.Add(dgvBatchFiles);
+                pnlFileList.Controls.Add(toolbarPanel);
+                pnlFileList.Controls.Add(bottomHelpPanel);
+
+                this.Controls.Add(pnlFileList);
+                pnlFileList.BringToFront();
+
+                // 初始若无待处理文件，填充当前单个文件
+                EnsureCurrentFileInBatchList();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 初始化批量列表面板失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 确保当前文件及同批待处理文件在批量列表中
+        /// </summary>
+        private void EnsureCurrentFileInBatchList()
+        {
+            try
+            {
+                if (_batchItems.Count == 0 && !string.IsNullOrEmpty(CurrentFileName))
+                {
+                    _batchItems.Add(new BatchFileItem
+                    {
+                        Index = 1,
+                        FilePath = CurrentFileName,
+                        FileName = Path.GetFileName(CurrentFileName),
+                        OrderNumber = orderNumberTextBox?.Text ?? "",
+                        Quantity = quantityTextBox?.Text ?? "",
+                        SerialNumber = SerialNumber ?? "1",
+                        Dimensions = AdjustedDimensions ?? "",
+                        Shape = SelectedShape.ToString()
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 确保当前文件在批量列表失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 设置待处理文件列表
+        /// </summary>
+        public void SetPendingFiles(IEnumerable<string> filePaths)
+        {
+            try
+            {
+                if (filePaths == null) return;
+                var rawList = filePaths.Where(f => !string.IsNullOrWhiteSpace(f)).ToList();
+                if (rawList.Count == 0) return;
+
+                var list = new List<string>();
+                if (!string.IsNullOrEmpty(CurrentFileName) && rawList.Contains(CurrentFileName, StringComparer.OrdinalIgnoreCase))
+                {
+                    list.Add(CurrentFileName);
+                }
+                foreach (var f in rawList)
+                {
+                    if (!list.Contains(f, StringComparer.OrdinalIgnoreCase))
+                    {
+                        list.Add(f);
+                    }
+                }
+                if (list.Count == 0)
+                {
+                    list = rawList;
+                }
+
+                _batchItems.Clear();
+                int startSerial = 1;
+                int.TryParse(SerialNumber, out startSerial);
+
+                for (int i = 0; i < list.Count; i++)
+                {
+                    string filePath = list[i];
+                    string fileName = Path.GetFileName(filePath);
+
+                    // 提取数量：优先 Excel 匹配，其次正则匹配 -(\d+)pcs
+                    string quantity = MatchQuantityForFile(fileName);
+                    if (string.IsNullOrEmpty(quantity))
+                    {
+                        quantity = quantityTextBox?.Text ?? "";
+                    }
+
+                    var item = new BatchFileItem
+                    {
+                        Index = i + 1,
+                        FilePath = filePath,
+                        FileName = fileName,
+                        Quantity = quantity,
+                        SerialNumber = (startSerial + i).ToString(),
+                        Dimensions = AdjustedDimensions ?? "",
+                        Shape = SelectedShape.ToString()
+                    };
+
+                    _batchItems.Add(item);
+                }
+
+                UpdateBatchOrderNumbers();
+                if (lblBatchTitle != null)
+                {
+                    lblBatchTitle.Text = $"待处理文件 ({_batchItems.Count} 款)";
+                }
+                dgvBatchFiles?.Refresh();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 设置待处理文件列表失败: {ex.Message}", ex);
+            }
+        }
+
+        public void SetPendingFiles(IEnumerable<FileRenameInfo> fileInfos)
+        {
+            if (fileInfos == null) return;
+            var paths = fileInfos.Select(f => f.FullPath).ToList();
+            SetPendingFiles(paths);
+        }
+
+        /// <summary>
+        /// 动态向待处理列表追加单个文件（线程安全）
+        /// </summary>
+        public void AppendPendingFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) return;
+            AppendPendingFiles(new[] { filePath });
+        }
+
+        /// <summary>
+        /// 动态向待处理列表批量追加文件（线程安全）
+        /// </summary>
+        public void AppendPendingFiles(IEnumerable<string> filePaths)
+        {
+            if (filePaths == null) return;
+
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke((Action)(() => AppendPendingFiles(filePaths)));
+                return;
+            }
+
+            try
+            {
+                int startSerial = 1;
+                int.TryParse(SerialNumber, out startSerial);
+
+                bool addedAny = false;
+                foreach (var filePath in filePaths)
+                {
+                    if (string.IsNullOrWhiteSpace(filePath)) continue;
+
+                    // 避免重复追加
+                    if (_batchItems.Any(item => string.Equals(item.FilePath, filePath, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+
+                    string fileName = Path.GetFileName(filePath);
+                    string quantity = MatchQuantityForFile(fileName);
+                    if (string.IsNullOrEmpty(quantity))
+                    {
+                        quantity = quantityTextBox?.Text ?? "";
+                    }
+
+                    int newIndex = _batchItems.Count + 1;
+                    var item = new BatchFileItem
+                    {
+                        Index = newIndex,
+                        FilePath = filePath,
+                        FileName = fileName,
+                        Quantity = quantity,
+                        SerialNumber = (startSerial + newIndex - 1).ToString(),
+                        Dimensions = AdjustedDimensions ?? "",
+                        Shape = SelectedShape.ToString()
+                    };
+
+                    _batchItems.Add(item);
+                    addedAny = true;
+                }
+
+                if (addedAny)
+                {
+                    UpdateBatchOrderNumbers();
+                    if (lblBatchTitle != null)
+                    {
+                        lblBatchTitle.Text = $"待处理文件 ({_batchItems.Count} 款)";
+                    }
+                    dgvBatchFiles?.Refresh();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 动态追加待处理文件失败: {ex.Message}", ex);
+            }
+        }
+
+        private string MatchQuantityForFile(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName)) return "";
+
+            // 1. 从文件名正则匹配例如 -100pcs, -500PCS
+            var match = Regex.Match(fileName, @"-(\d+)\s*pcs", RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return match.Groups[1].Value;
+            }
+
+            // 2. 如果有 Excel 数据，尝试按 searchColumnIndex 匹配
+            if (_excelData != null && _searchColumnIndex >= 0 && _returnColumnIndex >= 0)
+            {
+                string pureName = Path.GetFileNameWithoutExtension(fileName);
+                foreach (DataRow row in _excelData.Rows)
+                {
+                    string searchVal = row[_searchColumnIndex]?.ToString() ?? "";
+                    if (!string.IsNullOrEmpty(searchVal) && pureName.IndexOf(searchVal, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return row[_returnColumnIndex]?.ToString() ?? "";
+                    }
+                }
+            }
+
+            return "";
+        }
+
+        /// <summary>
+        /// 展开或折叠左侧文件列表面板
+        /// </summary>
+        public void ToggleBatchFileListPanel(bool expand)
+        {
+            try
+            {
+                if (expand == _isBatchPanelExpanded) return;
+
+                if (pnlFileList == null)
+                {
+                    InitializeBatchFileListPanel();
+                }
+
+                _isBatchPanelExpanded = expand;
+                pnlFileList.Visible = expand;
+
+                if (expand)
+                {
+                    EnsureCurrentFileInBatchList();
+                    UpdateBatchOrderNumbers();
+
+                    int targetLeft = Math.Max(0, this.Left - BATCH_PANEL_WIDTH);
+                    this.SetBounds(targetLeft, this.Top, this.Width + BATCH_PANEL_WIDTH, this.Height, BoundsSpecified.All);
+                    ShiftMainControls(BATCH_PANEL_WIDTH);
+                }
+                else
+                {
+                    ShiftMainControls(-BATCH_PANEL_WIDTH);
+                    this.SetBounds(this.Left + BATCH_PANEL_WIDTH, this.Top, this.Width - BATCH_PANEL_WIDTH, this.Height, BoundsSpecified.All);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 切换左侧面板失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 平移除左侧面板外的所有控件，保证视觉位置不变
+        /// </summary>
+        private void ShiftMainControls(int deltaX)
+        {
+            this.SuspendLayout();
+            foreach (Control c in this.Controls)
+            {
+                if (c != pnlFileList)
+                {
+                    c.Location = new Point(c.Left + deltaX, c.Top);
+                }
+            }
+            this.ResumeLayout(true);
+        }
+
+        /// <summary>
+        /// 从剪贴板批量粘贴数量（支持多选单元格或从指定起始行向下填充）
+        /// </summary>
+        public void PasteQuantitiesFromClipboard(int startRow = -1)
+        {
+            try
+            {
+                string clipText = Clipboard.GetText();
+                if (string.IsNullOrWhiteSpace(clipText)) return;
+
+                var lines = clipText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries);
+                if (lines.Length == 0) return;
+
+                // 解析剪贴板中的纯数值/文字列表
+                var parsedQuantities = new List<string>();
+                foreach (var line in lines)
+                {
+                    string trimmed = line.Trim();
+                    var numMatch = Regex.Match(trimmed, @"\d+");
+                    parsedQuantities.Add(numMatch.Success ? numMatch.Value : trimmed);
+                }
+
+                if (parsedQuantities.Count == 0) return;
+
+                // 获取当前选中的数量列单元格行索引列表（按升序排列）
+                var selectedQtyRows = new List<int>();
+                if (dgvBatchFiles != null && dgvBatchFiles.SelectedCells.Count > 0)
+                {
+                    int qtyColIndex = -1;
+                    for (int c = 0; c < dgvBatchFiles.Columns.Count; c++)
+                    {
+                        if (dgvBatchFiles.Columns[c].DataPropertyName == "Quantity")
+                        {
+                            qtyColIndex = c;
+                            break;
+                        }
+                    }
+
+                    if (qtyColIndex >= 0)
+                    {
+                        foreach (DataGridViewCell cell in dgvBatchFiles.SelectedCells)
+                        {
+                            if (cell.ColumnIndex == qtyColIndex && cell.RowIndex >= 0 && cell.RowIndex < _batchItems.Count)
+                            {
+                                if (!selectedQtyRows.Contains(cell.RowIndex))
+                                {
+                                    selectedQtyRows.Add(cell.RowIndex);
+                                }
+                            }
+                        }
+                    }
+                    selectedQtyRows.Sort();
+                }
+
+                // 场景 A：如果用户多选了数量列单元格（>1 个）
+                if (selectedQtyRows.Count > 1)
+                {
+                    // 1) 如果剪贴板只有 1 个数值：把这个数值同时填充给所有多选单元格
+                    if (parsedQuantities.Count == 1)
+                    {
+                        string singleVal = parsedQuantities[0];
+                        foreach (int r in selectedQtyRows)
+                        {
+                            _batchItems[r].Quantity = singleVal;
+                        }
+                    }
+                    else
+                    {
+                        // 2) 如果剪贴板有多个数值：依次对应填入选中的单元格
+                        for (int i = 0; i < selectedQtyRows.Count; i++)
+                        {
+                            if (i >= parsedQuantities.Count) break;
+                            int r = selectedQtyRows[i];
+                            _batchItems[r].Quantity = parsedQuantities[i];
+                        }
+                    }
+                }
+                else
+                {
+                    // 场景 B：单选或指定行起始位置向下批量填充
+                    int actualStartRow = startRow;
+                    if (actualStartRow < 0)
+                    {
+                        if (selectedQtyRows.Count == 1)
+                        {
+                            actualStartRow = selectedQtyRows[0];
+                        }
+                        else if (dgvBatchFiles?.CurrentCell != null)
+                        {
+                            actualStartRow = dgvBatchFiles.CurrentCell.RowIndex;
+                        }
+                        else
+                        {
+                            actualStartRow = 0;
+                        }
+                    }
+
+                    if (actualStartRow < 0) actualStartRow = 0;
+
+                    for (int i = 0; i < parsedQuantities.Count; i++)
+                    {
+                        int targetRow = actualStartRow + i;
+                        if (targetRow >= _batchItems.Count) break;
+                        _batchItems[targetRow].Quantity = parsedQuantities[i];
+                    }
+                }
+
+                dgvBatchFiles?.Refresh();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 批量粘贴数量失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// DataGridView 键盘事件：支持 Ctrl+V 批量向下粘贴多行数量
+        /// </summary>
+        private void DgvBatchFiles_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.V)
+            {
+                PasteQuantitiesFromClipboard();
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// 单元格鼠标按下事件：仅在右键点击数量列时弹出专属批量粘贴菜单
+        /// </summary>
+        private void DgvBatchFiles_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right && e.RowIndex >= 0 && e.ColumnIndex >= 0)
+            {
+                // 只有点击“数量”列（列名 colQty 或数据属性 Quantity）时才弹出菜单
+                if (dgvBatchFiles.Columns[e.ColumnIndex].DataPropertyName == "Quantity")
+                {
+                    var clickedCell = dgvBatchFiles.Rows[e.RowIndex].Cells[e.ColumnIndex];
+
+                    // 如果当前点击的单元格未被选中，则将其设为唯一点选；若已被选中（处于多选状态中），则保留现有多选状态
+                    if (!clickedCell.Selected)
+                    {
+                        dgvBatchFiles.ClearSelection();
+                        clickedCell.Selected = true;
+                        dgvBatchFiles.CurrentCell = clickedCell;
+                    }
+
+                    var cellRect = dgvBatchFiles.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
+                    var showPoint = new Point(cellRect.Left + e.X, cellRect.Top + e.Y);
+                    _batchContextMenu?.Show(dgvBatchFiles, showPoint);
+                }
+            }
+        }
+
+        private void DgvBatchFiles_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Left)
+            {
+                var hit = dgvBatchFiles.HitTest(e.X, e.Y);
+                // ✅ 仅在点击【序号】列（Index 列）时触发拖拽排序，保证数量列等其它单元格可以正常多选/编辑
+                if (hit.RowIndex >= 0 && hit.RowIndex < _batchItems.Count &&
+                    hit.ColumnIndex >= 0 && hit.ColumnIndex < dgvBatchFiles.Columns.Count &&
+                    dgvBatchFiles.Columns[hit.ColumnIndex].DataPropertyName == "Index")
+                {
+                    _rowIndexFromMouseDown = hit.RowIndex;
+                    Size dragSize = SystemInformation.DragSize;
+                    _dragBoxFromMouseDown = new Rectangle(
+                        new Point(e.X - (dragSize.Width / 2), e.Y - (dragSize.Height / 2)),
+                        dragSize);
+                }
+                else
+                {
+                    _rowIndexFromMouseDown = -1;
+                    _dragBoxFromMouseDown = Rectangle.Empty;
+                }
+            }
+        }
+
+        private void DgvBatchFiles_MouseMove(object sender, MouseEventArgs e)
+        {
+            if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
+            {
+                if (_dragBoxFromMouseDown != Rectangle.Empty && !_dragBoxFromMouseDown.Contains(e.X, e.Y))
+                {
+                    if (_rowIndexFromMouseDown >= 0 && _rowIndexFromMouseDown < _batchItems.Count)
+                    {
+                        dgvBatchFiles.DoDragDrop(_rowIndexFromMouseDown, DragDropEffects.Move);
+                    }
+                }
+            }
+        }
+
+        private void DgvBatchFiles_DragOver(object sender, DragEventArgs e)
+        {
+            e.Effect = DragDropEffects.Move;
+        }
+
+        private void DgvBatchFiles_DragDrop(object sender, DragEventArgs e)
+        {
+            try
+            {
+                Point clientPoint = dgvBatchFiles.PointToClient(new Point(e.X, e.Y));
+                var hit = dgvBatchFiles.HitTest(clientPoint.X, clientPoint.Y);
+                int targetRowIndex = hit.RowIndex;
+
+                if (targetRowIndex < 0)
+                {
+                    targetRowIndex = _batchItems.Count - 1;
+                }
+
+                if (_rowIndexFromMouseDown >= 0 && _rowIndexFromMouseDown < _batchItems.Count &&
+                    targetRowIndex >= 0 && targetRowIndex < _batchItems.Count &&
+                    _rowIndexFromMouseDown != targetRowIndex)
+                {
+                    MoveBatchItem(_rowIndexFromMouseDown, targetRowIndex);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 拖拽行调整失败: {ex.Message}", ex);
+            }
+            finally
+            {
+                _rowIndexFromMouseDown = -1;
+                _dragBoxFromMouseDown = Rectangle.Empty;
+            }
+        }
+
+        /// <summary>
+        /// 移动批量列表中的项目位置并刷新排序与订单号
+        /// </summary>
+        public void MoveBatchItem(int sourceIndex, int targetIndex)
+        {
+            if (sourceIndex < 0 || sourceIndex >= _batchItems.Count ||
+                targetIndex < 0 || targetIndex >= _batchItems.Count ||
+                sourceIndex == targetIndex)
+            {
+                return;
+            }
+
+            var item = _batchItems[sourceIndex];
+            _batchItems.RemoveAt(sourceIndex);
+            _batchItems.Insert(targetIndex, item);
+
+            UpdateBatchOrderNumbers();
+            dgvBatchFiles?.ClearSelection();
+            if (dgvBatchFiles != null && dgvBatchFiles.Rows.Count > targetIndex)
+            {
+                dgvBatchFiles.Rows[targetIndex].Cells[0].Selected = true;
+            }
+        }
+
+        private void BtnMoveUp_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                int rowIndex = -1;
+                if (dgvBatchFiles.CurrentCell != null)
+                {
+                    rowIndex = dgvBatchFiles.CurrentCell.RowIndex;
+                }
+                else if (dgvBatchFiles.SelectedRows.Count > 0)
+                {
+                    rowIndex = dgvBatchFiles.SelectedRows[0].Index;
+                }
+
+                if (rowIndex > 0 && rowIndex < _batchItems.Count)
+                {
+                    var item = _batchItems[rowIndex];
+                    _batchItems.RemoveAt(rowIndex);
+                    _batchItems.Insert(rowIndex - 1, item);
+
+                    UpdateBatchOrderNumbers();
+                    dgvBatchFiles.ClearSelection();
+                    if (dgvBatchFiles.Rows.Count > rowIndex - 1)
+                    {
+                        dgvBatchFiles.Rows[rowIndex - 1].Cells[0].Selected = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 上移失败: {ex.Message}", ex);
+            }
+        }
+
+        private void BtnMoveDown_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                int rowIndex = -1;
+                if (dgvBatchFiles.CurrentCell != null)
+                {
+                    rowIndex = dgvBatchFiles.CurrentCell.RowIndex;
+                }
+                else if (dgvBatchFiles.SelectedRows.Count > 0)
+                {
+                    rowIndex = dgvBatchFiles.SelectedRows[0].Index;
+                }
+
+                if (rowIndex >= 0 && rowIndex < _batchItems.Count - 1)
+                {
+                    var item = _batchItems[rowIndex];
+                    _batchItems.RemoveAt(rowIndex);
+                    _batchItems.Insert(rowIndex + 1, item);
+
+                    UpdateBatchOrderNumbers();
+                    dgvBatchFiles.ClearSelection();
+                    if (dgvBatchFiles.Rows.Count > rowIndex + 1)
+                    {
+                        dgvBatchFiles.Rows[rowIndex + 1].Cells[0].Selected = true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 下移失败: {ex.Message}", ex);
+            }
+        }
+
+        private void BtnSortAsc_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var sorted = _batchItems.OrderBy(x => x.FileName, StringComparer.OrdinalIgnoreCase).ToList();
+                _batchItems.Clear();
+                foreach (var item in sorted)
+                {
+                    _batchItems.Add(item);
+                }
+                UpdateBatchOrderNumbers();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 升序排序失败: {ex.Message}", ex);
+            }
+        }
+
+        private void BtnSortDesc_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                var sorted = _batchItems.OrderByDescending(x => x.FileName, StringComparer.OrdinalIgnoreCase).ToList();
+                _batchItems.Clear();
+                foreach (var item in sorted)
+                {
+                    _batchItems.Add(item);
+                }
+                UpdateBatchOrderNumbers();
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 降序排序失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 【批量处理】按钮点击事件：展开或关闭左侧待处理文件列表
+        /// </summary>
+        private void BtnApplyToAll_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // 切换左侧列表展开 / 关闭状态
+                ToggleBatchFileListPanel(!_isBatchPanelExpanded);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"切换批量列表失败: {ex.Message}", "系统错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// 同步当前表单参数到批量列表各项
+        /// </summary>
+        private void SyncCurrentFormDataToBatchItems()
+        {
+            try
+            {
+                EnsureCurrentFileInBatchList();
+                UpdateBatchOrderNumbers();
+
+                for (int i = 0; i < _batchItems.Count; i++)
+                {
+                    var item = _batchItems[i];
+                    item.Dimensions = AdjustedDimensions ?? "";
+                    item.Shape = ((int)SelectedShape).ToString();
+                    if (string.IsNullOrEmpty(item.Quantity))
+                    {
+                        item.Quantity = quantityTextBox?.Text ?? "";
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error($"[MaterialSelectFormModern] 同步表单数据到批量列表失败: {ex.Message}", ex);
+            }
+        }
+
+        #endregion
 
         /// <summary>
         /// 序号搜索复选框状态变更事件
@@ -3534,12 +5033,15 @@ namespace WindowsFormsApp3
             // 添加PDF预览检查，确保PDF能够自动加载
             this.BeginInvoke(new Action(async () =>
             {
+                if (this.IsDisposed || !this.IsHandleCreated) return;
                 await Task.Delay(300); // 等待窗体完全渲染
+                if (this.IsDisposed || !this.IsHandleCreated) return;
                 await TryLoadPendingPdf();
                 LogHelper.Debug("[PDF 预览] Shown事件中检查PDF加载");
                 
                 // 额外刷新PDF预览控件
                 await Task.Delay(200);
+                if (this.IsDisposed || !this.IsHandleCreated) return;
                 if (_isPreviewExpanded && PdfPreview != null)
                 {
                     PdfPreview.ApplyBestFitZoomPublic();
@@ -3548,6 +5050,7 @@ namespace WindowsFormsApp3
                 
                 // 🔧 最终确认：再次延迟后强制应用缩放（确保万无一失）
                 await Task.Delay(300);
+                if (this.IsDisposed || !this.IsHandleCreated) return;
                 if (_isPreviewExpanded && PdfPreview != null && PdfPreview.PageCount > 0)
                 {
                     LogHelper.Debug("[PDF 预览] Shown事件最终确认应用缩放");
@@ -3555,6 +5058,7 @@ namespace WindowsFormsApp3
                 }
                 
                 // 窗体内容准备好后，恢复显示
+                if (this.IsDisposed || !this.IsHandleCreated) return;
                 if (this.Opacity == 0)
                 {
                     this.Opacity = _opacityValue > 0 ? _opacityValue : 1.0;
@@ -3574,14 +5078,33 @@ namespace WindowsFormsApp3
                 PdfPreview?.ClosePdf();
                 LogHelper.Debug("[MaterialSelectFormModern] 已关闭PDF预览，释放文件句柄");
                 
-                // 保存窗口位置和状态
-                WindowPositionManager.SaveWindowPosition(this, _isPreviewExpanded);
-                LogHelper.Debug($"[MaterialSelectFormModern] 保存窗口位置: Location={this.Location}, Size={this.Size}, PreviewExpanded={_isPreviewExpanded}");
+                // 如果左侧列表展开过，先计算并恢复到无左侧列表时的基准位置与宽度，再进行持久化保存
+                int saveX = this.Location.X;
+                int saveY = this.Location.Y;
+                int saveWidth = this.Size.Width;
+                int saveHeight = this.Size.Height;
 
-                // 🔧 关键修复：立即提交所有待处理的设置更改，确保窗口位置被保存到文件
-                // 不能只依赖5秒自动保存定时器，因为窗口关闭的速度可能更快
-                AppSettings.CommitChanges();
-                LogHelper.Debug("[MaterialSelectFormModern] 已立即提交窗口位置设置到文件");
+                if (_isBatchPanelExpanded)
+                {
+                    saveX += BATCH_PANEL_WIDTH;
+                    saveWidth -= BATCH_PANEL_WIDTH;
+                }
+
+                if (this.WindowState == FormWindowState.Normal)
+                {
+                    AppSettings.MaterialFormX = saveX;
+                    AppSettings.MaterialFormY = saveY;
+                    AppSettings.MaterialFormWidth = saveWidth;
+                    AppSettings.MaterialFormHeight = saveHeight;
+                    AppSettings.MaterialFormMaximized = false;
+                    AppSettings.MaterialFormPreviewExpanded = _isPreviewExpanded;
+                    AppSettings.CommitChanges();
+                    LogHelper.Debug($"[MaterialSelectFormModern] 保存窗口位置(已自动剥离左侧面板): Location=({saveX}, {saveY}), Width={saveWidth}, Height={saveHeight}");
+                }
+                else
+                {
+                    WindowPositionManager.SaveWindowPosition(this, _isPreviewExpanded);
+                }
             }
             catch (Exception ex)
             {
@@ -4437,6 +5960,77 @@ namespace WindowsFormsApp3
         // 右键菜单消息常量
         private const int WM_CONTEXTMENU = 0x007B;
 
+        private void EnsureTemporaryImpositionParameters()
+        {
+            if (_temporaryImpositionParameters != null)
+            {
+                return;
+            }
+
+            _temporaryImpositionParameters = new TemporaryImpositionParameters
+            {
+                PaperWidth = GetFloatValue(AppSettings.Get("Imposition_PaperWidth") as string, 0),
+                PaperHeight = GetFloatValue(AppSettings.Get("Imposition_PaperHeight") as string, 0),
+                FixedWidth = GetFloatValue(AppSettings.Get("Imposition_FixedWidth") as string, 0),
+                MinLength = GetFloatValue(AppSettings.Get("Imposition_MinLength") as string, 0),
+                MarginTop = GetFloatValue(AppSettings.Get("Imposition_MarginTop") as string, 0),
+                MarginBottom = GetFloatValue(AppSettings.Get("Imposition_MarginBottom") as string, 0),
+                MarginLeft = GetFloatValue(AppSettings.Get("Imposition_MarginLeft") as string, 0),
+                MarginRight = GetFloatValue(AppSettings.Get("Imposition_MarginRight") as string, 0),
+                RollMarginTop = GetFloatValue(AppSettings.Get("Imposition_RollMarginTop") as string, 0),
+                RollMarginBottom = GetFloatValue(AppSettings.Get("Imposition_RollMarginBottom") as string, 0),
+                RollMarginLeft = GetFloatValue(AppSettings.Get("Imposition_RollMarginLeft") as string, 0),
+                RollMarginRight = GetFloatValue(AppSettings.Get("Imposition_RollMarginRight") as string, 0),
+                RequestedRows = GetIntValue(AppSettings.Get("Imposition_Rows") as string, 0),
+                RequestedColumns = GetIntValue(AppSettings.Get("Imposition_Columns") as string, 0),
+                IsForceRotationEnabled = _forceRotationEnabled
+            };
+        }
+
+        private void OpenTemporaryImpositionParameters()
+        {
+            EnsureTemporaryImpositionParameters();
+            bool isFlatSheet = flatSheetRadioButton?.Checked == true;
+            var parameters = _temporaryImpositionParameters.Clone();
+
+            // 卷装使用独立边距字段，避免覆盖平张本次临时边距。
+            if (!isFlatSheet)
+            {
+                parameters.MarginTop = parameters.RollMarginTop;
+                parameters.MarginBottom = parameters.RollMarginBottom;
+                parameters.MarginLeft = parameters.RollMarginLeft;
+                parameters.MarginRight = parameters.RollMarginRight;
+            }
+
+            using (var form = new TemporaryImpositionParametersForm(isFlatSheet, parameters))
+            {
+                if (form.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                var updated = form.Parameters.Clone();
+                if (!isFlatSheet)
+                {
+                    updated.RollMarginTop = updated.MarginTop;
+                    updated.RollMarginBottom = updated.MarginBottom;
+                    updated.RollMarginLeft = updated.MarginLeft;
+                    updated.RollMarginRight = updated.MarginRight;
+                    updated.MarginTop = _temporaryImpositionParameters.MarginTop;
+                    updated.MarginBottom = _temporaryImpositionParameters.MarginBottom;
+                    updated.MarginLeft = _temporaryImpositionParameters.MarginLeft;
+                    updated.MarginRight = _temporaryImpositionParameters.MarginRight;
+                }
+                _temporaryImpositionParameters = updated;
+                _forceRotationEnabled = _temporaryImpositionParameters.IsForceRotationEnabled;
+                _isUpdatingLayoutInputs = true;
+                _rowsInput.Text = _temporaryImpositionParameters.RequestedRows > 0 ? _temporaryImpositionParameters.RequestedRows.ToString() : string.Empty;
+                _columnsInput.Text = _temporaryImpositionParameters.RequestedColumns > 0 ? _temporaryImpositionParameters.RequestedColumns.ToString() : string.Empty;
+                _isUpdatingLayoutInputs = false;
+                OnImpositionSettingsChanged(this, EventArgs.Empty);
+            }
+        }
+
         /// <summary>
         /// 重写窗口消息处理，捕获右键菜单
         /// </summary>
@@ -4458,6 +6052,15 @@ namespace WindowsFormsApp3
                 // 转换屏幕坐标到客户端坐标
                 Point clientPoint = this.PointToClient(new Point(x, y));
 
+                // 输入框及左侧列表面板保留原生/专属右键行为，避免全局预设菜单拦截。
+                if ((_rowsInput != null && _rowsInput.Bounds.Contains(clientPoint)) ||
+                    (_columnsInput != null && _columnsInput.Bounds.Contains(clientPoint)) ||
+                    (pnlFileList != null && pnlFileList.Visible && pnlFileList.Bounds.Contains(clientPoint)))
+                {
+                    base.WndProc(ref m);
+                    return;
+                }
+
                 // 显示右键菜单
                 UpdatePresetMenu();
                 _presetContextMenu.Show(this, clientPoint);
@@ -4473,6 +6076,8 @@ namespace WindowsFormsApp3
         private void InitializePresetContextMenu()
         {
             _presetContextMenu = new System.Windows.Forms.ContextMenuStrip();
+            _presetContextMenu.Items.Add("临时排版参数...", null, (s, e) => OpenTemporaryImpositionParameters());
+            _presetContextMenu.Items.Add(new ToolStripSeparator());
             _presetContextMenu.Items.Add("保存为预设...", null, (s, e) => SaveCurrentAsPreset());
 
             // 管理预设
@@ -4482,7 +6087,7 @@ namespace WindowsFormsApp3
             _presetContextMenu.Items.Add(new ToolStripSeparator());
 
             // 预留位置给预设列表（动态插入）
-            _presetContextMenu.Items.Add(new ToolStripMenuItem(""));
+            _presetContextMenu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(""));
 
             // 加载预设列表
             UpdatePresetMenu();
@@ -4713,13 +6318,13 @@ namespace WindowsFormsApp3
         {
             if (_presetContextMenu == null) return;
 
-            // 菜单结构: 保存预设 | 管理预设 | 分隔线 | 预设列表...
+            // 菜单结构: 临时参数 | 分隔线 | 保存预设 | 管理预设 | 分隔线 | 预设列表...
             var presets = AppSettings.MaterialPresets;
 
-            // 移除旧的预设列表项（从索引3开始）
-            while (_presetContextMenu.Items.Count > 3)
+            // 移除旧的预设列表项（从索引5开始）
+            while (_presetContextMenu.Items.Count > 5)
             {
-                _presetContextMenu.Items.RemoveAt(3);
+                _presetContextMenu.Items.RemoveAt(5);
             }
 
             if (presets != null && presets.Count > 0)
@@ -4727,7 +6332,7 @@ namespace WindowsFormsApp3
                 foreach (var preset in presets)
                 {
                     // 创建预设主菜单项 - 直接点击加载
-                    var menuItem = new ToolStripMenuItem(preset.Name, null, (s, e) => LoadPreset(preset.Name));
+                    var menuItem = new System.Windows.Forms.ToolStripMenuItem(preset.Name, null, (s, e) => LoadPreset(preset.Name));
 
                     // 使用 Add 而非 Insert，保持与 PresetManagementForm 中一致的顺序
                     _presetContextMenu.Items.Add(menuItem);
@@ -4735,7 +6340,7 @@ namespace WindowsFormsApp3
             }
             else
             {
-                var noPresetItem = new ToolStripMenuItem("(无预设)");
+                var noPresetItem = new System.Windows.Forms.ToolStripMenuItem("(无预设)");
                 noPresetItem.Enabled = false;
                 _presetContextMenu.Items.Add(noPresetItem);
             }
@@ -4789,6 +6394,7 @@ namespace WindowsFormsApp3
                         CopyMode = _copyMode,
                         CopyType = _copyType,
                         EnableImposition = enableImpositionCheckbox?.Checked == true,
+                        TemporaryImpositionParameters = _temporaryImpositionParameters?.Clone(),
                         ExportPath = SelectedExportPath ?? "",
                         RoundRadius = RoundRadius,
                         MaterialType = flatSheetRadioButton?.Checked == true ? "FlatSheet" : "RollMaterial",
@@ -5067,6 +6673,18 @@ namespace WindowsFormsApp3
                         flatSheetRadioButton.Checked = true;
                     else if (preset.MaterialType == "RollMaterial")
                         rollMaterialRadioButton.Checked = true;
+                }
+
+                if (preset.TemporaryImpositionParameters != null)
+                {
+                    _temporaryImpositionParameters = preset.TemporaryImpositionParameters.Clone();
+                    _forceRotationEnabled = _temporaryImpositionParameters.IsForceRotationEnabled;
+                    _isUpdatingLayoutInputs = true;
+                    if (_rowsInput != null)
+                        _rowsInput.Text = _temporaryImpositionParameters.RequestedRows > 0 ? _temporaryImpositionParameters.RequestedRows.ToString() : string.Empty;
+                    if (_columnsInput != null)
+                        _columnsInput.Text = _temporaryImpositionParameters.RequestedColumns > 0 ? _temporaryImpositionParameters.RequestedColumns.ToString() : string.Empty;
+                    _isUpdatingLayoutInputs = false;
                 }
 
                 // 加载排版模式（连拼/折手）
@@ -6239,6 +7857,10 @@ namespace WindowsFormsApp3
                     if (radio == rollMaterialRadioButton && rollMaterialRadioButton?.Checked == false)
                     {
                         _forceRotationEnabled = false;
+                        if (_temporaryImpositionParameters != null)
+                        {
+                            _temporaryImpositionParameters.IsForceRotationEnabled = false;
+                        }
                         LogHelper.Debug("[MaterialSelectFormModern] 材料类型切换到平张，重置强制旋转标志");
                     }
                 }
@@ -6509,6 +8131,22 @@ namespace WindowsFormsApp3
         {
             try
             {
+                EnsureTemporaryImpositionParameters();
+                if (_temporaryImpositionParameters.PaperWidth > 0 && _temporaryImpositionParameters.PaperHeight > 0)
+                {
+                    return new FlatSheetConfiguration
+                    {
+                        PaperWidth = _temporaryImpositionParameters.PaperWidth,
+                        PaperHeight = _temporaryImpositionParameters.PaperHeight,
+                        MarginTop = _temporaryImpositionParameters.MarginTop,
+                        MarginBottom = _temporaryImpositionParameters.MarginBottom,
+                        MarginLeft = _temporaryImpositionParameters.MarginLeft,
+                        MarginRight = _temporaryImpositionParameters.MarginRight,
+                        Rows = _temporaryImpositionParameters.RequestedRows,
+                        Columns = _temporaryImpositionParameters.RequestedColumns
+                    };
+                }
+
                 var paperWidthStr = AppSettings.Get("Imposition_PaperWidth") as string;
                 var paperHeightStr = AppSettings.Get("Imposition_PaperHeight") as string;
 
@@ -6554,6 +8192,22 @@ namespace WindowsFormsApp3
         {
             try
             {
+                EnsureTemporaryImpositionParameters();
+                if (_temporaryImpositionParameters.FixedWidth > 0 && _temporaryImpositionParameters.MinLength > 0)
+                {
+                    return new RollMaterialConfiguration
+                    {
+                        FixedWidth = _temporaryImpositionParameters.FixedWidth,
+                        MinLength = _temporaryImpositionParameters.MinLength,
+                        MarginTop = _temporaryImpositionParameters.RollMarginTop,
+                        MarginBottom = _temporaryImpositionParameters.RollMarginBottom,
+                        MarginLeft = _temporaryImpositionParameters.RollMarginLeft,
+                        MarginRight = _temporaryImpositionParameters.RollMarginRight,
+                        Rows = _temporaryImpositionParameters.RequestedRows,
+                        Columns = _temporaryImpositionParameters.RequestedColumns
+                    };
+                }
+
                 var rollWidthStr = AppSettings.Get("Imposition_FixedWidth") as string;
                 var minLengthStr = AppSettings.Get("Imposition_MinLength") as string;
 
@@ -6607,6 +8261,12 @@ namespace WindowsFormsApp3
 
                 if (materialType == "FlatSheet")
                 {
+                    EnsureTemporaryImpositionParameters();
+                    if (_temporaryImpositionParameters.PaperWidth > 0 && _temporaryImpositionParameters.PaperHeight > 0)
+                    {
+                        return GetFlatSheetConfiguration();
+                    }
+
                     // 印刷行业要求：必须从设置中明确加载平张纸张尺寸，不允许使用备选值
                     var paperWidthStr = AppSettings.Get("Imposition_PaperWidth") as string;
                     var paperHeightStr = AppSettings.Get("Imposition_PaperHeight") as string;
@@ -6665,6 +8325,12 @@ namespace WindowsFormsApp3
                 }
                 else
                 {
+                    EnsureTemporaryImpositionParameters();
+                    if (_temporaryImpositionParameters.FixedWidth > 0 && _temporaryImpositionParameters.MinLength > 0)
+                    {
+                        return GetRollMaterialConfiguration();
+                    }
+
                     // 从设置中加载卷装材料页面尺寸配置
                     var rollWidthStr = AppSettings.Get("Imposition_FixedWidth") as string;
                     var minLengthStr = AppSettings.Get("Imposition_MinLength") as string;
@@ -6885,6 +8551,8 @@ namespace WindowsFormsApp3
                     return;
                 }
 
+                UpdateLayoutInputsStatus(status);
+
                 // 更新行数显示
                 if (rowsDisplayLabel != null)
                 {
@@ -6938,6 +8606,10 @@ namespace WindowsFormsApp3
                     Invoke((Action)(() => UpdateLayoutDisplay(rows, columns, layoutCount)));
                     return;
                 }
+
+                int.TryParse(rows, out int parsedRows);
+                int.TryParse(columns, out int parsedCols);
+                UpdateLayoutInputsDisplay(parsedRows, parsedCols);
 
                 // 更新行数显示
                 var rowsDisplayLabel = Controls.Find("rowsDisplayLabel", true).FirstOrDefault() as AntdUI.Label;
@@ -7000,6 +8672,8 @@ namespace WindowsFormsApp3
 
                 // 保存当前排版计算结果
                 _currentImpositionResult = result;
+
+                UpdateLayoutInputsDisplay(result.Rows, result.Columns);
 
                 // 更新行数显示
                 if (rowsDisplayLabel != null)
@@ -7160,6 +8834,8 @@ namespace WindowsFormsApp3
 
                 // 清空当前排版计算结果缓存，确保GetRows和GetColumns返回0
                 _currentImpositionResult = null;
+
+                UpdateLayoutInputsStatus("清空");
 
                 // 更新行数显示
                 var rowsDisplayLabel = Controls.Find("rowsDisplayLabel", true).FirstOrDefault() as AntdUI.Label;
@@ -7725,6 +9401,8 @@ namespace WindowsFormsApp3
 
                 // 切换强制旋转状态
                 _forceRotationEnabled = !_forceRotationEnabled;
+                EnsureTemporaryImpositionParameters();
+                _temporaryImpositionParameters.IsForceRotationEnabled = _forceRotationEnabled;
                 LogHelper.Debug($"[MaterialSelectFormModern] 旋转角度切换: {_forceRotationEnabled}");
 
                 // 重新计算布局
@@ -8403,7 +10081,11 @@ namespace WindowsFormsApp3
 
         private void orderNumberTextBox_TextChanged(object sender, EventArgs e)
         {
-
+            OrderNumber = orderNumberTextBox?.Text ?? "";
+            if (_currentOrderNumberMode != OrderNumberMode.RegexExtraction)
+            {
+                UpdateBatchOrderNumbers();
+            }
         }
 
         private void label1_Click(object sender, EventArgs e)
@@ -8585,6 +10267,12 @@ namespace WindowsFormsApp3
                 previewCollapseButton.DefaultBorderColor = theme.Border;
             }
 
+            // 订单号模式按钮
+            if (btnOrderNumberMode != null)
+            {
+                ApplyThemeToMaterialButton(btnOrderNumberMode, theme, isDark);
+            }
+
             // 预设按钮面板
             if (presetButtonsPanel != null)
             {
@@ -8684,11 +10372,21 @@ namespace WindowsFormsApp3
             {
                 rowsDisplayLabel.ForeColor = theme.Primary;
             }
+            if (_rowsInput != null)
+            {
+                _rowsInput.ForeColor = theme.Primary;
+                _rowsInput.PlaceholderColor = theme.Primary;
+            }
 
             // Columns (Accent 2) -> Success (成功色 - 绿)
             if (columnsDisplayLabel != null)
             {
                 columnsDisplayLabel.ForeColor = theme.Success;
+            }
+            if (_columnsInput != null)
+            {
+                _columnsInput.ForeColor = theme.Success;
+                _columnsInput.PlaceholderColor = theme.Success;
             }
 
             // LayoutCount (Accent 3) -> Warning (警告色 - 橙)
@@ -8716,7 +10414,7 @@ namespace WindowsFormsApp3
         {
             // 复选框
             var checkboxes = new AntdUI.Checkbox[] {
-                autoIncrementCheckbox, chkIdentifierPage, enableImpositionCheckbox, duplicateLayoutCheckbox
+                chkIdentifierPage, enableImpositionCheckbox, duplicateLayoutCheckbox
             };
 
             foreach (var checkbox in checkboxes)

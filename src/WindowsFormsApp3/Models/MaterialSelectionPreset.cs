@@ -88,6 +88,9 @@ namespace WindowsFormsApp3.Models
         /// </summary>
         public bool EnableImposition { get; set; } = false;
 
+        /// <summary>材料选择框临时排版参数；为空时回退全局默认配置。</summary>
+        public TemporaryImpositionParameters TemporaryImpositionParameters { get; set; }
+
         /// <summary>
         /// 预设加载时禁用的参数（使用 PresetIgnoreOptions 标志）
         /// </summary>
@@ -121,6 +124,7 @@ namespace WindowsFormsApp3.Models
                 MaterialType = this.MaterialType,
                 LayoutMode = this.LayoutMode,
                 EnableImposition = this.EnableImposition,
+                TemporaryImpositionParameters = this.TemporaryImpositionParameters?.Clone(),
                 DisabledOptions = this.DisabledOptions,
                 ShowInPresetButtons = this.ShowInPresetButtons
             };
@@ -149,6 +153,7 @@ namespace WindowsFormsApp3.Models
             this.MaterialType = other.MaterialType;
             this.LayoutMode = other.LayoutMode;
             this.EnableImposition = other.EnableImposition;
+            this.TemporaryImpositionParameters = other.TemporaryImpositionParameters?.Clone();
             this.DisabledOptions = other.DisabledOptions;
             this.ShowInPresetButtons = other.ShowInPresetButtons;
         }

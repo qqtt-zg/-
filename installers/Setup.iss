@@ -2,15 +2,15 @@
 ; 应用程序基本信息
 AppName=大诚重命名工具
 AppId={{D5F3E9B0-FEAT-ADD-PERF-MONITOR-FORM}}
-AppVersion=2.5.9
-AppVerName=大诚重命名工具 v2.5.9
+AppVersion=2.6.0
+AppVerName=大诚重命名工具 v2.6.0
 AppPublisher=大诚软件
 AppPublisherURL=
 AppSupportURL=
 AppUpdatesURL=
 AppCopyright=Copyright (C) 2026 大诚软件
 ; 版本更新说明
-AppComments=V2.5.9更新内容：修复部分CorelDRAW PDF处理后第一页内容丢失的问题；
+AppComments=V2.6.0更新内容：新增与优化排版功能（卷装/平张排版计算与临时参数设置）、订单号模式升级（无/自动递增/正则提取与二级规则选择）、应用到全部左侧文件列表顺序调整与数量批量粘贴、增强PDF处理逻辑、提升批量处理稳定性与性能；
 
 ; 默认安装目录
 DefaultDirName={autopf}\大诚重命名工具
@@ -19,7 +19,7 @@ DefaultGroupName=大诚重命名工具
 ; 输出设置
 ; 注意：文件名包含版本号，确保每次版本更新都会生成不同的文件名，从而保留旧版本的安装包
 ; 请确保在更新版本号时同步更新此处的文件名版本号
-OutputBaseFilename=大诚重命名工具_v2.5.9_安装包
+OutputBaseFilename=大诚重命名工具_v2.6.0_安装包
 OutputDir=.\安装包
 ; SetupIconFile=dc.ico
 

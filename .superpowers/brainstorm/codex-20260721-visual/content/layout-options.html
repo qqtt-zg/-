@@ -1,0 +1,65 @@
+<style>
+  .layout-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; }
+  .layout-card { border:1px solid var(--border); border-radius:14px; padding:14px; cursor:pointer; background:var(--surface); }
+  .layout-card.selected { outline:3px solid #1677ff; }
+  .tag { display:inline-block; padding:3px 8px; border-radius:10px; background:#e6f4ff; color:#0958d9; font-size:12px; }
+  .wire { border:1px solid #cfd6df; border-radius:8px; overflow:hidden; margin:12px 0; background:#f7f9fb; color:#334155; font-size:11px; }
+  .bar { padding:7px 9px; background:#e8edf3; border-bottom:1px solid #cfd6df; font-weight:600; }
+  .row { display:flex; min-height:112px; }
+  .side { width:30%; padding:8px; border-right:1px solid #cfd6df; }
+  .main { flex:1; padding:8px; }
+  .block { height:20px; margin:5px 0; border-radius:4px; background:#dce5ef; }
+  .block.blue { background:#b7d8ff; }
+  .block.green { background:#bfe8d0; }
+  .footerbar { display:flex; justify-content:flex-end; gap:6px; padding:7px; border-top:1px solid #cfd6df; }
+  .btn { padding:4px 9px; border-radius:4px; background:#1677ff; color:white; }
+  .note { margin-top:18px; padding:14px; border-left:4px solid #1677ff; background:#f0f7ff; border-radius:8px; }
+  @media (max-width: 1000px) { .layout-grid { grid-template-columns:1fr; } }
+</style>
+
+<h2>批量 PDF 工作台：哪种参数布局最实用？</h2>
+<p class="subtitle">重点比较：统一批次参数、少量文件例外、组合预设、预检与执行反馈。点击一个方案进行选择。</p>
+
+<div class="layout-grid">
+  <div class="layout-card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="tag">A · 高密度表格</div>
+    <h3>所有参数直接放在文件表格</h3>
+    <div class="wire">
+      <div class="bar">文件｜形状｜旋转｜折手｜标识页｜输出</div>
+      <div class="main">
+        <div class="block blue"></div><div class="block"></div><div class="block"></div><div class="block"></div>
+      </div>
+      <div class="footerbar"><span class="btn">开始处理</span></div>
+    </div>
+    <p>单文件编辑最快，但列数会非常多，难以显示标识页内容、圆角、补页规则等复杂配置。</p>
+  </div>
+
+  <div class="layout-card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="tag">B · 推荐</div>
+    <h3>上方批次配置 + 文件表格 + 右侧详情</h3>
+    <div class="wire">
+      <div class="bar">组合预设 ▾　批次默认参数摘要　　预检</div>
+      <div class="row">
+        <div class="side"><b>文件队列</b><div class="block blue"></div><div class="block"></div><div class="block"></div></div>
+        <div class="main"><b>选中文件配置</b><div class="block green"></div><div class="block"></div><div class="block"></div><small>继承批次 / 单文件覆盖</small></div>
+      </div>
+      <div class="footerbar"><span>12 个文件 · 2 个覆盖</span><span class="btn">开始处理</span></div>
+    </div>
+    <p>批次默认值负责效率；右侧只在需要时调整单文件。表格保持清晰，同时可以承载复杂参数。</p>
+  </div>
+
+  <div class="layout-card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="tag">C · 分步向导</div>
+    <h3>文件 → 参数 → 例外 → 预检 → 执行</h3>
+    <div class="wire">
+      <div class="bar">①文件　②预设　③例外　④预检　⑤执行</div>
+      <div class="main" style="min-height:112px"><div class="block blue"></div><div class="block"></div><div class="block"></div></div>
+      <div class="footerbar"><span class="btn">下一步</span></div>
+    </div>
+    <p>引导性最好，适合低频用户；频繁修改和反复检查时步骤较多，操作效率偏低。</p>
+  </div>
+</div>
+
+<div class="note">
+  <strong>我的建议：</strong>选择 B。表格只显示文件名、状态、参数摘要和“已覆盖”标记；形状、旋转、折手、标识页的完整控件放在批次配置区与右侧详情区，不把几十个字段铺成几十列。
+</div>

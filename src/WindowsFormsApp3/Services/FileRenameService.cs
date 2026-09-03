@@ -19,6 +19,8 @@ namespace WindowsFormsApp3.Services
     /// </summary>
     public class FileRenameService : WindowsFormsApp3.Interfaces.IFileRenameService
     {
+        private static readonly string[] DefaultTargetLayerNames = { "Dots_AddCounter", "Dots_L_B_出血线" };
+        private static readonly string[] CompatibleTargetLayerNames = { "Dots_L_N_轮廓线", "Dots_L_C_切割线", "Dots_L_B_出血线" };
         private IEventBus _eventBus;
         private readonly IPdfDimensionService _pdfDimensionService;
         
@@ -692,9 +694,7 @@ namespace WindowsFormsApp3.Services
                     }
 
                     // 检查PDF文件是否已经存在所需图层
-                    bool layersExist = _pdfDimensionService.CheckPdfLayersExist(
-                        tempFileInfo.FullPath,
-                        pdfOptions.TargetLayerNames ?? new[] { "Dots_AddCounter", "Dots_L_B_出血线" });
+                    bool layersExist = HasRequiredPdfLayers(tempFileInfo.FullPath, pdfOptions.TargetLayerNames);
 
                     if (!layersExist)
                     {
@@ -998,12 +998,10 @@ namespace WindowsFormsApp3.Services
 
                 LogHelper.Debug($"=== 图层过滤检查（页面重排前执行） ===");
                 LogHelper.Debug($"检查文件: {tempFileInfo.FullPath}");
-                LogHelper.Debug($"目标图层: {string.Join(", ", pdfOptions.TargetLayerNames ?? new[] { "Dots_AddCounter", "Dots_L_B_出血线" })}");
+                LogHelper.Debug($"目标图层: {string.Join(", ", pdfOptions.TargetLayerNames ?? DefaultTargetLayerNames)}");
 
                 // 检查PDF文件是否已经存在所需图层
-                bool layersExist = _pdfDimensionService.CheckPdfLayersExist(
-                    tempFileInfo.FullPath,
-                    pdfOptions.TargetLayerNames ?? new[] { "Dots_AddCounter", "Dots_L_B_出血线" });
+                bool layersExist = HasRequiredPdfLayers(tempFileInfo.FullPath, pdfOptions.TargetLayerNames);
 
                 if (layersExist)
                 {
@@ -1028,6 +1026,24 @@ namespace WindowsFormsApp3.Services
                 // 异常情况下继续执行完整流程以确保处理成功
                 return false;
             }
+        }
+
+        /// <summary>
+        /// 检查PDF是否已包含默认图层方案或兼容图层方案。
+        /// </summary>
+        internal bool HasRequiredPdfLayers(string filePath, string[] targetLayerNames)
+        {
+            string[] requiredLayerNames = targetLayerNames ?? DefaultTargetLayerNames;
+            if (_pdfDimensionService.CheckPdfLayersExist(filePath, requiredLayerNames))
+            {
+                return true;
+            }
+
+            bool usesDefaultLayerScheme = requiredLayerNames.Length == DefaultTargetLayerNames.Length
+                && DefaultTargetLayerNames.All(layerName => requiredLayerNames.Contains(layerName, StringComparer.OrdinalIgnoreCase));
+
+            return usesDefaultLayerScheme
+                && _pdfDimensionService.CheckPdfLayersExist(filePath, CompatibleTargetLayerNames);
         }
 
         private bool ProcessPdfFileInternalSync(FileRenameInfo tempFileInfo, PdfProcessingOptions pdfOptions)

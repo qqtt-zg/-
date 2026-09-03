@@ -135,9 +135,16 @@ namespace WindowsFormsApp3.Services
 
                         using (Spire.Pdf.PdfDocument sourceDocument = new Spire.Pdf.PdfDocument())
                         {
-                            sourceDocument.LoadFromFile(sourceFile);
-                            // 将源文档的所有页面添加到合并文档
-                            mergedDocument.AppendPage(sourceDocument);
+                            try
+                            {
+                                sourceDocument.LoadFromFile(sourceFile);
+                                // 将源文档的所有页面添加到合并文档
+                                mergedDocument.AppendPage(sourceDocument);
+                            }
+                            finally
+                            {
+                                sourceDocument.Close();
+                            }
                         }
                     }
 

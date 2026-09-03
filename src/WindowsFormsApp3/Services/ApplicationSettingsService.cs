@@ -230,6 +230,11 @@ namespace WindowsFormsApp3.Services
                     _settings = settings;
                     _logger.LogDebug($"[SaveSettingsInternal] Material='{_settings.Material}', Separator='{_settings.Separator}', ToggleMinimizeHotkey='{_settings.ToggleMinimizeHotkey}'");
                     var json = JsonConvert.SerializeObject(_settings, Formatting.Indented);
+                    var dir = Path.GetDirectoryName(_settingsFilePath);
+                    if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
                     File.WriteAllText(_settingsFilePath, json);
                     _logger.LogDebug($"[SaveSettingsInternal] 已保存到文件: {_settingsFilePath}");
                 }

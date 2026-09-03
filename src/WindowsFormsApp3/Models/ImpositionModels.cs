@@ -556,6 +556,11 @@ namespace WindowsFormsApp3.Models
         public long CalculationTimeMs { get; set; }
 
         /// <summary>
+        /// 卷装材料实际使用长度（毫米）。平张材料不设置该值。
+        /// </summary>
+        public float? ActualMaterialLength { get; set; }
+
+        /// <summary>
         /// 材料类型
         /// </summary>
         public MaterialType MaterialType { get; set; }

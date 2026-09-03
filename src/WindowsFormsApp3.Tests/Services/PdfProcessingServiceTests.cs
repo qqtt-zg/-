@@ -170,7 +170,7 @@ namespace WindowsFormsApp3.Tests.Services
                 // 清理额外的测试文件
                 try
                 {
-                    if (File.Exists(testFile1)) File.Delete(testFile1);
+                    if (File.Exists(testFile1)) { try { File.Delete(testFile1); } catch (IOException) { } }
                     if (File.Exists(testFile2)) File.Delete(testFile2);
                     if (File.Exists(outputFile)) File.Delete(outputFile);
                 }
@@ -199,7 +199,10 @@ namespace WindowsFormsApp3.Tests.Services
             finally
             {
                 // 清理测试文件
-                if (File.Exists(testFile1)) File.Delete(testFile1);
+                if (File.Exists(testFile1))
+                {
+                    try { File.Delete(testFile1); } catch (IOException) { }
+                }
             }
         }
 

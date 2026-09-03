@@ -218,6 +218,74 @@ namespace WindowsFormsApp3.Tests.Services
         }
 
         [Fact]
+        public void HasRequiredPdfLayers_Should_Return_True_For_Complete_Default_Scheme()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "default_layers.pdf");
+            CreateTestPdfWithLayers(pdfPath, "Dots_AddCounter", "Dots_L_B_出血线");
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, null);
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void HasRequiredPdfLayers_Should_Return_True_For_Complete_Compatible_Scheme()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "compatible_layers.pdf");
+            CreateTestPdfWithLayers(pdfPath, "Dots_L_N_轮廓线", "Dots_L_C_切割线", "Dots_L_B_出血线");
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, null);
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void HasRequiredPdfLayers_Should_Return_False_For_Compatible_Scheme_With_Custom_Target_Layers()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "compatible_layers_with_custom_target.pdf");
+            string[] customTargetLayerNames = { "Custom_Outline", "Custom_Cut" };
+            CreateTestPdfWithLayers(pdfPath, "Dots_L_N_轮廓线", "Dots_L_C_切割线", "Dots_L_B_出血线");
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, customTargetLayerNames);
+
+            Assert.False(result);
+        }
+
+        [Fact]
+        public void HasRequiredPdfLayers_Should_Return_True_For_Complete_Custom_Target_Layers()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "custom_target_layers.pdf");
+            string[] customTargetLayerNames = { "Custom_Outline", "Custom_Cut" };
+            CreateTestPdfWithLayers(pdfPath, customTargetLayerNames);
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, customTargetLayerNames);
+
+            Assert.True(result);
+        }
+
+        [Fact]
+        public void HasRequiredPdfLayers_Should_Return_False_For_Shared_Bleed_Layer_Only()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "bleed_layer_only.pdf");
+            CreateTestPdfWithLayers(pdfPath, "Dots_L_B_出血线");
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, null);
+
+            Assert.False(result);
+        }
+
+        [Fact]
+        public void HasRequiredPdfLayers_Should_Return_False_For_Incomplete_Compatible_Scheme()
+        {
+            string pdfPath = Path.Combine(_testDirectory, "incomplete_compatible_layers.pdf");
+            CreateTestPdfWithLayers(pdfPath, "Dots_L_N_轮廓线", "Dots_L_B_出血线");
+
+            bool result = _fileRenameService.HasRequiredPdfLayers(pdfPath, null);
+
+            Assert.False(result);
+        }
+
+        [Fact]
         public void AdvancedPageReorganizer_Should_Unify_Mixed_PageSizes()
         {
             string sourcePdfPath = Path.Combine(_testDirectory, "mixed_pages_reorg.pdf");
@@ -339,6 +407,22 @@ namespace WindowsFormsApp3.Tests.Services
                 document.AddNewPage(new iText.Kernel.Geom.PageSize(200, 300));
                 document.AddNewPage(new iText.Kernel.Geom.PageSize(200, 300));
                 document.AddNewPage(new iText.Kernel.Geom.PageSize(320, 420));
+            }
+        }
+
+        private static void CreateTestPdfWithLayers(string filePath, params string[] layerNames)
+        {
+            using (var writer = new PdfWriter(filePath))
+            using (var document = new PdfDocument(writer))
+            {
+                PdfPage page = document.AddNewPage();
+                foreach (string layerName in layerNames)
+                {
+                    var layer = new iText.Kernel.Pdf.Layer.PdfLayer(layerName, document);
+                    var canvas = new PdfCanvas(page);
+                    canvas.BeginLayer(layer).EndLayer();
+                    canvas.Release();
+                }
             }
         }
 

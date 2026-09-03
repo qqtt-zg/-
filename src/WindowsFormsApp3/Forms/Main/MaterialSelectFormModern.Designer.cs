@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using AntdUI;
 using System.Drawing;
 using System.Windows.Forms;
@@ -40,7 +40,8 @@ namespace WindowsFormsApp3
             this.fileNameSeparator = new System.Windows.Forms.Panel();
             this.orderNumberLabel = new AntdUI.Label();
             this.orderNumberTextBox = new AntdUI.Input();
-            this.autoIncrementCheckbox = new AntdUI.Checkbox();
+            this.btnOrderNumberMode = new AntdUI.Button();
+            this.btnApplyToAll = new AntdUI.Button();
             this.quantityLabel = new AntdUI.Label();
             this.quantityTextBox = new AntdUI.Input();
             this.incrementTextBox = new AntdUI.Input();
@@ -141,7 +142,7 @@ namespace WindowsFormsApp3
             this.orderNumberLabel.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.orderNumberLabel.Location = new System.Drawing.Point(150, 333);
             this.orderNumberLabel.Name = "orderNumberLabel";
-            this.orderNumberLabel.Size = new System.Drawing.Size(40, 25);
+            this.orderNumberLabel.Size = new System.Drawing.Size(42, 25);
             this.orderNumberLabel.TabIndex = 2;
             this.orderNumberLabel.Text = "订单号:";
             this.orderNumberLabel.Click += new System.EventHandler(this.orderNumberLabel_Click);
@@ -152,19 +153,34 @@ namespace WindowsFormsApp3
             this.orderNumberTextBox.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
             this.orderNumberTextBox.Location = new System.Drawing.Point(197, 329);
             this.orderNumberTextBox.Name = "orderNumberTextBox";
-            this.orderNumberTextBox.Size = new System.Drawing.Size(120, 32);
+            this.orderNumberTextBox.Size = new System.Drawing.Size(97, 32);
             this.orderNumberTextBox.TabIndex = 3;
             this.orderNumberTextBox.WaveSize = 0;
             this.orderNumberTextBox.TextChanged += new System.EventHandler(this.orderNumberTextBox_TextChanged);
             // 
-            // autoIncrementCheckbox
+            // btnOrderNumberMode
             // 
-            this.autoIncrementCheckbox.Location = new System.Drawing.Point(320, 329);
-            this.autoIncrementCheckbox.Margin = new System.Windows.Forms.Padding(0);
-            this.autoIncrementCheckbox.Name = "autoIncrementCheckbox";
-            this.autoIncrementCheckbox.Size = new System.Drawing.Size(32, 32);
-            this.autoIncrementCheckbox.TabIndex = 4;
-            this.autoIncrementCheckbox.CheckedChanged += new AntdUI.BoolEventHandler(this.autoIncrementCheckbox_CheckedChanged);
+            this.btnOrderNumberMode.BorderWidth = 1F;
+            this.btnOrderNumberMode.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnOrderNumberMode.Location = new System.Drawing.Point(300, 329);
+            this.btnOrderNumberMode.Name = "btnOrderNumberMode";
+            this.btnOrderNumberMode.Size = new System.Drawing.Size(69, 32);
+            this.btnOrderNumberMode.TabIndex = 4;
+            this.btnOrderNumberMode.Text = "无";
+            this.btnOrderNumberMode.WaveSize = 0;
+            this.btnOrderNumberMode.Click += new System.EventHandler(this.btnOrderNumberMode_Click);
+            // 
+            // btnApplyToAll
+            // 
+            this.btnApplyToAll.BorderWidth = 2F;
+            this.btnApplyToAll.Font = new System.Drawing.Font("Microsoft YaHei UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(134)));
+            this.btnApplyToAll.Location = new System.Drawing.Point(161, 598);
+            this.btnApplyToAll.Name = "btnApplyToAll";
+            this.btnApplyToAll.Size = new System.Drawing.Size(76, 28);
+            this.btnApplyToAll.TabIndex = 19;
+            this.btnApplyToAll.Text = "批量处理";
+            this.btnApplyToAll.WaveSize = 0;
+            this.btnApplyToAll.Click += new System.EventHandler(this.BtnApplyToAll_Click);
             // 
             // quantityLabel
             // 
@@ -943,6 +959,7 @@ namespace WindowsFormsApp3
             this.Controls.Add(this.fileNameSeparator);
             this.Controls.Add(this.fileNameLabel);
             this.Controls.Add(this.presetButtonsPanel);
+            this.Controls.Add(this.btnApplyToAll);
             this.Controls.Add(this.confirmButton);
             this.Controls.Add(this.cancelButton);
             this.Controls.Add(this.colorModeButton);
@@ -962,7 +979,7 @@ namespace WindowsFormsApp3
             this.Controls.Add(this.filmTypeRedButton);
             this.Controls.Add(this.orderNumberLabel);
             this.Controls.Add(this.orderNumberTextBox);
-            this.Controls.Add(this.autoIncrementCheckbox);
+            this.Controls.Add(this.btnOrderNumberMode);
             this.Controls.Add(this.quantityLabel);
             this.Controls.Add(this.quantityTextBox);
             this.Controls.Add(this.incrementTextBox);
@@ -1011,7 +1028,8 @@ namespace WindowsFormsApp3
         // 基本信息控件
         private AntdUI.Label orderNumberLabel;
         private AntdUI.Input orderNumberTextBox;
-        private AntdUI.Checkbox autoIncrementCheckbox;
+        private AntdUI.Button btnOrderNumberMode;
+        private AntdUI.Button btnApplyToAll;
         private AntdUI.Label quantityLabel;
         private AntdUI.Input quantityTextBox;
         private AntdUI.Input incrementTextBox;
