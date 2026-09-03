@@ -91,6 +91,14 @@ namespace WindowsFormsApp3.Services
             double finalWidth = CustomRound(width - tetBleed * 2);
             double finalHeight = CustomRound(height - tetBleed * 2);
 
+            // 根据设置决定是否大数在前（统一格式，避免54x84与84x54不一致）
+            if (AppSettings.SwapWidthHeightForDisplay && finalWidth < finalHeight)
+            {
+                double temp = finalWidth;
+                finalWidth = finalHeight;
+                finalHeight = temp;
+            }
+
             // 基础尺寸格式 (整数不显示小数，非整数显示一位小数)
             string dimensions = $"{finalWidth:0.#}x{finalHeight:0.#}";
 

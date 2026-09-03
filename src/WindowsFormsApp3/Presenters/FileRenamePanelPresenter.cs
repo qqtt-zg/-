@@ -25,6 +25,15 @@ namespace WindowsFormsApp3.Presenters
     {
         private readonly IFileRenamePanelView _view;
         private readonly Interfaces.IFileRenameService _fileRenameService;
+
+        private class StagedBatchItem
+        {
+            public string OriginalFilePath { get; set; }
+            public string StagedFilePath { get; set; }
+            public string FinalDestPath { get; set; }
+            public FileRenameInfo FileInfo { get; set; }
+        }
+
         private readonly Services.IFileMonitor _fileMonitor;
         private readonly IExcelImportService _excelImportService;
         private readonly IPdfDimensionService _pdfDimensionService;
@@ -951,13 +960,15 @@ namespace WindowsFormsApp3.Presenters
         /// 处理新文件
         /// </summary>
         /// <param name="filePath">文件路径</param>
-                /// <summary>
+        /// <summary>
         /// 方案A：处理【应用到全部】批量文件列表流水线
         /// </summary>
         private async Task ProcessApplyToAllBatchAsync(MaterialSelectionResult selectionResult)
         {
+            string stagingDir = Path.Combine(Path.GetTempPath(), $"batch_staging_{Guid.NewGuid():N}");
             try
             {
+                Directory.CreateDirectory(stagingDir);
                 var batchItems = selectionResult.BatchItems;
                 _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 开始按列表顺序批量处理 {batchItems.Count} 款文件");
 
@@ -999,13 +1010,14 @@ namespace WindowsFormsApp3.Presenters
                 _currentAddIdentifierPage = selectionResult.AddIdentifierPage;
                 _currentIdentifierPageContent = selectionResult.IdentifierPageContent;
 
-                int successCount = 0;
                 var (dim, shape) = ParseDimensionsAndShape(selectionResult.Dimensions ?? "");
+                var stagedItems = new List<StagedBatchItem>();
 
+                // 阶段一：在独立临时工作区中逐一完成所有文件的 PDF 处理并落盘验证保存
                 for (int i = 0; i < batchItems.Count; i++)
                 {
                     var item = batchItems[i];
-                    _view.UpdateProgress(i + 1, batchItems.Count, $"正在处理 ({i + 1}/{batchItems.Count}): {item.FileName}");
+                    _view.UpdateProgress(i + 1, batchItems.Count, $"正在处理并保存 ({i + 1}/{batchItems.Count}): {item.FileName}");
 
                     var currentFileInfo = CreateFileRenameInfo(item.FilePath);
                     if (currentFileInfo == null)
@@ -1023,46 +1035,308 @@ namespace WindowsFormsApp3.Presenters
                     currentFileInfo.OrderNumber = item.OrderNumber ?? "";
                     currentFileInfo.Quantity = item.Quantity ?? "";
                     currentFileInfo.SerialNumber = item.SerialNumber ?? (i + 1).ToString();
-                    currentFileInfo.Dimensions = dim;
-                    currentFileInfo.Shape = shape;
+                    // ✅ 关键修复：以各自文件的实际原始尺寸为基准计算成品尺寸与裁切线
+                    // 如果文件自身解析到了有效宽高，按该文件自身尺寸减去出血计算成品尺寸；否则兜底使用弹窗尺寸
+                    string itemFinalDimensions = selectionResult.Dimensions ?? "";
+                    if (double.TryParse(currentFileInfo.Width, out double fileW) && double.TryParse(currentFileInfo.Height, out double fileH) && fileW > 0 && fileH > 0)
+                    {
+                        double bleed = selectionResult.SelectedTetBleed;
+                        var dimensionService = ServiceLocator.Instance.GetDimensionCalculationService();
+                        string cornerRadius = selectionResult.CornerRadius ?? "0";
+                        bool enableShapeProcessing = selectionResult.IsShapeSelected;
+
+                        // 单个文件弹窗处理时，在计算出血和成品尺寸前已根据 SwapWidthHeightForDisplay 进行了大数在前交换：
+                        if (AppSettings.SwapWidthHeightForDisplay && fileW < fileH)
+                        {
+                            double temp = fileW;
+                            fileW = fileH;
+                            fileH = temp;
+                            currentFileInfo.Width = fileW.ToString("0.#");
+                            currentFileInfo.Height = fileH.ToString("0.#");
+                        }
+
+                        itemFinalDimensions = dimensionService.CalculateFinalDimensions(fileW, fileH, bleed, cornerRadius, enableShapeProcessing);
+                        var (itemDim, itemShape) = ParseDimensionsAndShape(itemFinalDimensions);
+                        currentFileInfo.Dimensions = itemDim;
+                        currentFileInfo.Shape = itemShape;
+                    }
+                    else
+                    {
+                        currentFileInfo.Dimensions = dim;
+                        currentFileInfo.Shape = shape;
+                    }
                     currentFileInfo.Process = selectionResult.Process ?? "";
-                    currentFileInfo.LayoutRows = selectionResult.LayoutRows ?? "";
-                    currentFileInfo.LayoutColumns = selectionResult.LayoutColumns ?? "";
                     currentFileInfo.ImpositionMode = GetImpositionModeString();
 
-                    // 计算平张布局数量
-                    UpdateBothLayoutCountsAsync(currentFileInfo);
+                    // ✅ 关键升级：完全对齐单个文件的排版计算逻辑
+                    // 1. 调用 AnalyzePdfFileAsync 获取该文件的真实物理尺寸、CropBox、页面旋转角
+                    int itemLayoutQuantity = _currentLayoutQuantity;
+                    int itemRotationAngle = selectionResult.RotationAngle;
 
-                    // 生成新文件名
-                    currentFileInfo.NewName = GenerateNewFileName(currentFileInfo);
-
-                    _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 款 {i + 1}/{batchItems.Count}: 文件={item.FileName}, 订单号={currentFileInfo.OrderNumber}, 数量={currentFileInfo.Quantity}, 新名称={currentFileInfo.NewName}");
-
-                    // 在UI表格中展示
-                    if (System.Windows.Forms.Application.OpenForms.Count > 0)
+                    if (_currentEnableImposition && _impositionService != null)
                     {
-                        System.Windows.Forms.Application.OpenForms[0].Invoke((Action)(() =>
+                        ImpositionPdfInfo pdfInfo = null;
+                        try
                         {
-                            AddFileToTable(currentFileInfo);
-                        }));
+                            if (File.Exists(item.FilePath))
+                            {
+                                pdfInfo = await _impositionService.AnalyzePdfFileAsync(item.FilePath);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger?.LogWarning($"[ProcessApplyToAllBatchAsync] 获取真实PDF信息失败，将使用备选尺寸: {ex.Message}");
+                        }
+
+                        if (pdfInfo == null)
+                        {
+                            float rawW = 0f, rawH = 0f;
+                            if (double.TryParse(currentFileInfo.Width, out double rw) && double.TryParse(currentFileInfo.Height, out double rh) && rw > 0 && rh > 0)
+                            {
+                                rawW = (float)rw;
+                                rawH = (float)rh;
+                            }
+                            pdfInfo = new ImpositionPdfInfo
+                            {
+                                FilePath = item.FilePath,
+                                FileName = item.FileName,
+                                PageCount = 1,
+                                FirstPageSize = new Utils.PageSize { Width = rawW, Height = rawH },
+                                CropBoxWidth = rawW,
+                                CropBoxHeight = rawH,
+                                HasCropBox = true,
+                                PageRotation = 0
+                            };
+                        }
+
+                        // 2. 结合弹窗的临时参数或全局设置获取排版配置（完全对齐单文件弹窗逻辑）
+                        var flatConfig = GetCurrentFlatSheetConfiguration(selectionResult.TemporaryImpositionParameters);
+                        var rollConfig = GetCurrentRollMaterialConfiguration(selectionResult.TemporaryImpositionParameters);
+
+                        ImpositionResult flatRes = null;
+                        if (flatConfig != null)
+                        {
+                            flatRes = await _impositionService.CalculateFlatSheetLayoutAsync(flatConfig, pdfInfo);
+                            if (flatRes != null && flatRes.Success && flatRes.OptimalLayoutQuantity > 0)
+                            {
+                                currentFileInfo.FlatSheetLayoutCount = flatRes.OptimalLayoutQuantity.ToString();
+                                currentFileInfo.FlatSheetLayoutRows = flatRes.Rows.ToString();
+                                currentFileInfo.FlatSheetLayoutColumns = flatRes.Columns.ToString();
+                            }
+                        }
+
+                        ImpositionResult rollRes = null;
+                        if (rollConfig != null)
+                        {
+                            RollRotationMode? rollRotMode = selectionResult.IsForceRotationEnabled 
+                                ? (selectionResult.RotationAngle == 270 ? RollRotationMode.Force270Degree : RollRotationMode.Force0Degree)
+                                : (RollRotationMode?)null;
+                            rollRes = await _impositionService.CalculateRollMaterialLayoutAsync(rollConfig, pdfInfo, default, rollRotMode);
+                            if (rollRes != null && rollRes.Success && rollRes.OptimalLayoutQuantity > 0)
+                            {
+                                currentFileInfo.RollMaterialLayoutCount = rollRes.OptimalLayoutQuantity.ToString();
+                                currentFileInfo.RollMaterialLayoutRows = rollRes.Rows.ToString();
+                                currentFileInfo.RollMaterialLayoutColumns = rollRes.Columns.ToString();
+                            }
+                        }
+
+                        // 3. 确定该文件的当前排版模式、行列数与版数
+                        if (_currentImpositionMaterialType == "FlatSheet" && flatRes != null && flatRes.Success)
+                        {
+                            currentFileInfo.LayoutRows = flatRes.Rows > 0 ? flatRes.Rows.ToString() : "";
+                            currentFileInfo.LayoutColumns = flatRes.Columns > 0 ? flatRes.Columns.ToString() : "";
+                            itemLayoutQuantity = flatRes.OptimalLayoutQuantity;
+                            if (!selectionResult.IsForceRotationEnabled)
+                            {
+                                itemRotationAngle = flatRes.UseRotation ? 270 : 0;
+                            }
+                        }
+                        else if (_currentImpositionMaterialType == "RollMaterial" && rollRes != null && rollRes.Success)
+                        {
+                            currentFileInfo.LayoutRows = rollRes.Rows > 0 ? rollRes.Rows.ToString() : "";
+                            currentFileInfo.LayoutColumns = rollRes.Columns > 0 ? rollRes.Columns.ToString() : "";
+                            itemLayoutQuantity = rollRes.OptimalLayoutQuantity;
+                            if (!selectionResult.IsForceRotationEnabled)
+                            {
+                                itemRotationAngle = rollRes.RotationAngle;
+                            }
+                        }
+
+                        // 4. 正方形尺寸（差值 <= 0.09mm）在未手动强制旋转时锁定不旋转
+                        if (!selectionResult.IsForceRotationEnabled)
+                        {
+                            float effectiveW = pdfInfo.GetEffectivePageWidth();
+                            float effectiveH = pdfInfo.GetEffectivePageHeight();
+                            if (effectiveW > 0 && effectiveH > 0 && Math.Abs(effectiveW - effectiveH) <= 0.09f)
+                            {
+                                itemRotationAngle = 0;
+                                _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 文件 {item.FileName} 尺寸 {effectiveW:F2}x{effectiveH:F2}mm 判定为正方形，锁定旋转为 0°");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        currentFileInfo.LayoutRows = selectionResult.LayoutRows ?? "";
+                        currentFileInfo.LayoutColumns = selectionResult.LayoutColumns ?? "";
+                        UpdateBothLayoutCountsAsync(currentFileInfo);
                     }
 
-                    // 执行重命名 / 复制
-                    bool success = await RenameFileAsync(currentFileInfo);
-                    if (success) successCount++;
+                    // 生成该文件专属的新文件名
+                    currentFileInfo.NewName = GenerateNewFileName(currentFileInfo);
+                    _logger?.LogInformation($"[ProcessApplyToAllBatchAsync] 暂存处理款 {i + 1}/{batchItems.Count}: 文件={item.FileName}, 订单号={currentFileInfo.OrderNumber}, 数量={currentFileInfo.Quantity}, 尺寸={currentFileInfo.Dimensions}{currentFileInfo.Shape}, 旋转={itemRotationAngle}°, 排版={currentFileInfo.LayoutRows}x{currentFileInfo.LayoutColumns}, 新名称={currentFileInfo.NewName}");
+
+                    // ✅ 关键升级：为当前文件动态生成专属标识页内容（包含该文件自己的订单号、数量、序号、尺寸等）
+                    string itemIdentifierPageContent = _currentAddIdentifierPage
+                        ? GenerateIdentifierPageContentForFile(currentFileInfo)
+                        : "";
+
+                    bool itemNeedsRotation = itemRotationAngle != 0;
+                    bool isPdfFile = item.FilePath.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+                    bool needsPdfProcessing = isPdfFile && (_currentIsShapeSelected || itemNeedsRotation || _currentAddIdentifierPage ||
+                        (_currentEnableImposition && _currentLayoutMode == LayoutMode.Folding && itemLayoutQuantity > 0));
+
+                    // 准备最终目标文件路径（处理重命名冲突）
+                    string targetDestPath = Path.Combine(_exportPath, currentFileInfo.NewName);
+                    targetDestPath = HandleFileNameConflict(targetDestPath);
+                    currentFileInfo.NewName = Path.GetFileName(targetDestPath);
+
+                    // 暂存文件路径
+                    string stagedPath = Path.Combine(stagingDir, $"staged_{i}_{Path.GetFileName(item.FilePath)}");
+                    bool stageSuccess = false;
+
+                    if (needsPdfProcessing)
+                    {
+                        var pdfOptions = new PdfProcessingOptions
+                        {
+                            IsPdfFile = true,
+                            AddPdfLayers = _currentIsShapeSelected,
+                            ShapeType = _currentShapeType,
+                            RoundRadius = _currentRoundRadius,
+                            FinalDimensions = itemFinalDimensions,
+                            RotationAngle = itemRotationAngle,
+                            LayoutMode = _currentLayoutMode,
+                            LayoutQuantity = itemLayoutQuantity,
+                            CopyCount = _currentCopyCount,
+                            CopyType = _currentCopyType,
+                            DuplicateCount = _currentDuplicateCount,
+                            AddIdentifierPage = _currentAddIdentifierPage,
+                            IdentifierPageContent = itemIdentifierPageContent
+                        };
+
+                        var stagedInfo = new FileRenameInfo
+                        {
+                            FullPath = item.FilePath,
+                            OriginalName = item.FileName,
+                            NewName = Path.GetFileName(stagedPath)
+                        };
+
+                        stageSuccess = _fileRenameService.RenameFileImmediately(stagedInfo, stagingDir, isCopyMode: true, pdfOptions);
+                        if (stageSuccess && File.Exists(stagedInfo.FullPath))
+                        {
+                            stagedPath = stagedInfo.FullPath;
+                        }
+                        else
+                        {
+                            stageSuccess = false;
+                        }
+                    }
+                    else
+                    {
+                        try
+                        {
+                            File.Copy(item.FilePath, stagedPath, overwrite: true);
+                            stageSuccess = true;
+                        }
+                        catch (Exception copyEx)
+                        {
+                            _logger?.LogError(copyEx, $"[ProcessApplyToAllBatchAsync] 暂存复制失败: {item.FilePath}");
+                            stageSuccess = false;
+                        }
+                    }
+
+                    if (stageSuccess)
+                    {
+                        stagedItems.Add(new StagedBatchItem
+                        {
+                            OriginalFilePath = item.FilePath,
+                            StagedFilePath = stagedPath,
+                            FinalDestPath = targetDestPath,
+                            FileInfo = currentFileInfo
+                        });
+                    }
+                    else
+                    {
+                        _logger?.LogError($"[ProcessApplyToAllBatchAsync] 文件 {item.FileName} 暂存处理失败");
+                    }
+                }
+
+                // 阶段二：所有文件全部处理并保存完毕后，统一批量移动/复制到目标路径
+                int successCount = 0;
+                _view.UpdateProgress(0, stagedItems.Count, "所有文件处理完成，正在统一移动到目标文件夹...");
+
+                for (int j = 0; j < stagedItems.Count; j++)
+                {
+                    var staged = stagedItems[j];
+                    _view.UpdateProgress(j + 1, stagedItems.Count, $"正在移动 ({j + 1}/{stagedItems.Count}): {staged.FileInfo.NewName}");
+
+                    try
+                    {
+                        if (_isCopyMode)
+                        {
+                            File.Copy(staged.StagedFilePath, staged.FinalDestPath, overwrite: true);
+                        }
+                        else
+                        {
+                            File.Copy(staged.StagedFilePath, staged.FinalDestPath, overwrite: true);
+                            if (!string.Equals(staged.OriginalFilePath, staged.FinalDestPath, StringComparison.OrdinalIgnoreCase) && File.Exists(staged.OriginalFilePath))
+                            {
+                                try { File.Delete(staged.OriginalFilePath); } catch (Exception delEx) { _logger?.LogWarning($"删除原文件失败: {delEx.Message}"); }
+                            }
+                        }
+
+                        staged.FileInfo.FullPath = staged.FinalDestPath;
+                        successCount++;
+
+                        // 在UI表格中展示
+                        if (System.Windows.Forms.Application.OpenForms.Count > 0)
+                        {
+                            System.Windows.Forms.Application.OpenForms[0].Invoke((Action)(() =>
+                            {
+                                AddFileToTable(staged.FileInfo);
+                            }));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger?.LogError(ex, $"[ProcessApplyToAllBatchAsync] 移动文件到目标路径失败: {staged.FinalDestPath}");
+                    }
                 }
 
                 _view.HideProgress();
                 _view.UpdateStatus($"批量应用完成: 成功 {successCount} 款, 共 {batchItems.Count} 款");
                 if (AppSettings.ShowRenameCompleteNotification)
                 {
-                    _view.ShowSuccess($"已成功按列表顺序批量处理 {successCount}/{batchItems.Count} 款文件");
+                    _view.ShowSuccess($"已成功按列表顺序批量处理并移动 {successCount}/{batchItems.Count} 款文件");
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogError(ex, $"[ProcessApplyToAllBatchAsync] 批量处理异常: {ex.Message}");
                 _view.ShowError($"批量处理失败: {ex.Message}");
+            }
+            finally
+            {
+                try
+                {
+                    if (Directory.Exists(stagingDir))
+                    {
+                        Directory.Delete(stagingDir, true);
+                    }
+                }
+                catch (Exception cleanEx)
+                {
+                    _logger?.LogWarning($"清理批量临时目录失败: {cleanEx.Message}");
+                }
             }
         }
 
@@ -1211,15 +1485,9 @@ namespace WindowsFormsApp3.Presenters
 
                     _logger?.LogInformation($"[ProcessNewFileAsync] 材料选择对话框返回: {dialogResult}");
 
-                                        if (dialogResult == System.Windows.Forms.DialogResult.OK && selectionResult != null)
+                    if (dialogResult == System.Windows.Forms.DialogResult.OK && selectionResult != null)
                     {
                         _logger?.LogInformation($"[ProcessNewFileAsync] 用户选择材料: {selectionResult.SelectedMaterial}");
-                        // ✅ 如果材料选择框使用了正则提取模式，将选中的正则规则同步回主面板下拉框
-                        if (selectionResult.OrderNumberMode == OrderNumberMode.RegexExtraction && !string.IsNullOrEmpty(selectionResult.SelectedOrderRegexName))
-                        {
-                            _view.SetSelectedRegexPattern(selectionResult.SelectedOrderRegexName);
-                        }
-
                         // ✅ 方案A：如果用户点击【应用到全部】，按确认的列表顺序批量处理
                         if (selectionResult.IsApplyToAll && selectionResult.BatchItems != null && selectionResult.BatchItems.Count > 0)
                         {
@@ -3976,5 +4244,176 @@ namespace WindowsFormsApp3.Presenters
         }
 
         #endregion
-    }
+    
+        /// <summary>
+        /// 获取当前平张排版配置（优先使用弹窗临时参数）
+        /// </summary>
+        private FlatSheetConfiguration GetCurrentFlatSheetConfiguration(TemporaryImpositionParameters tempParams = null)
+        {
+            if (tempParams != null && tempParams.PaperWidth > 0 && tempParams.PaperHeight > 0)
+            {
+                return new FlatSheetConfiguration
+                {
+                    PaperWidth = tempParams.PaperWidth,
+                    PaperHeight = tempParams.PaperHeight,
+                    MarginTop = tempParams.MarginTop,
+                    MarginBottom = tempParams.MarginBottom,
+                    MarginLeft = tempParams.MarginLeft,
+                    MarginRight = tempParams.MarginRight,
+                    Rows = tempParams.RequestedRows,
+                    Columns = tempParams.RequestedColumns
+                };
+            }
+
+            float paperWidth = GetFloatSetting("Imposition_PaperWidth", 320);
+            float paperHeight = GetFloatSetting("Imposition_PaperHeight", 450);
+            if (paperWidth <= 0 || paperHeight <= 0) return null;
+            return new FlatSheetConfiguration
+            {
+                PaperWidth = paperWidth,
+                PaperHeight = paperHeight,
+                MarginTop = GetFloatSetting("Imposition_MarginTop", 2),
+                MarginBottom = GetFloatSetting("Imposition_MarginBottom", 2),
+                MarginLeft = GetFloatSetting("Imposition_MarginLeft", 2),
+                MarginRight = GetFloatSetting("Imposition_MarginRight", 2),
+                Rows = GetIntSetting("Imposition_Rows", 0),
+                Columns = GetIntSetting("Imposition_Columns", 0)
+            };
+        }
+
+        /// <summary>
+        /// 获取当前卷装排版配置（优先使用弹窗临时参数）
+        /// </summary>
+        private RollMaterialConfiguration GetCurrentRollMaterialConfiguration(TemporaryImpositionParameters tempParams = null)
+        {
+            if (tempParams != null && tempParams.FixedWidth > 0 && tempParams.MinLength > 0)
+            {
+                return new RollMaterialConfiguration
+                {
+                    FixedWidth = tempParams.FixedWidth,
+                    MinLength = tempParams.MinLength,
+                    MarginTop = tempParams.RollMarginTop,
+                    MarginBottom = tempParams.RollMarginBottom,
+                    MarginLeft = tempParams.RollMarginLeft,
+                    MarginRight = tempParams.RollMarginRight,
+                    Rows = tempParams.RequestedRows,
+                    Columns = tempParams.RequestedColumns
+                };
+            }
+
+            float fixedWidth = GetFloatSetting("Imposition_FixedWidth", 320);
+            float minLength = GetFloatSetting("Imposition_MinLength", 100);
+            if (fixedWidth <= 0 || minLength <= 0) return null;
+            return new RollMaterialConfiguration
+            {
+                FixedWidth = fixedWidth,
+                MinLength = minLength,
+                MarginTop = GetFloatSetting("Imposition_RollMarginTop", 2),
+                MarginBottom = GetFloatSetting("Imposition_RollMarginBottom", 2),
+                MarginLeft = GetFloatSetting("Imposition_RollMarginLeft", 2),
+                MarginRight = GetFloatSetting("Imposition_RollMarginRight", 2),
+                Rows = GetIntSetting("Imposition_Rows", 0),
+                Columns = GetIntSetting("Imposition_Columns", 0)
+            };
+        }
+
+        private static float GetFloatSetting(string key, float defaultValue)
+        {
+            try
+            {
+                var val = AppSettings.Get(key)?.ToString();
+                if (float.TryParse(val, out float res)) return res;
+            }
+            catch { }
+            return defaultValue;
+        }
+
+        private static int GetIntSetting(string key, int defaultValue)
+        {
+            try
+            {
+                var val = AppSettings.Get(key)?.ToString();
+                if (int.TryParse(val, out int res)) return res;
+            }
+            catch { }
+            return defaultValue;
+        }
+
+        /// <summary>
+        /// 为单文件动态生成专属标识页内容（按系统配置项提取该文件自身的订单号、数量、序号、尺寸等）
+        /// </summary>
+        private string GenerateIdentifierPageContentForFile(FileRenameInfo fileInfo)
+        {
+            if (fileInfo == null) return "";
+            try
+            {
+                string savedItems = AppSettings.Get("TextItems") as string;
+                List<string> selectedItems;
+                if (string.IsNullOrEmpty(savedItems))
+                {
+                    selectedItems = new List<string> { "正则结果", "订单号", "材料", "数量", "工艺", "尺寸", "序号" };
+                }
+                else
+                {
+                    selectedItems = new List<string>();
+                    var allValid = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "正则结果", "订单号", "材料", "数量", "工艺", "尺寸", "序号", "列组合" };
+                    foreach (var item in savedItems.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (allValid.Contains(item))
+                        {
+                            selectedItems.Add(item);
+                        }
+                    }
+                }
+
+                var parts = new List<string>();
+                string separator = AppSettings.Separator ?? "";
+
+                foreach (var item in selectedItems)
+                {
+                    string part = "";
+                    switch (item)
+                    {
+                        case "正则结果":
+                            part = fileInfo.RegexResult ?? "";
+                            break;
+                        case "订单号":
+                            part = fileInfo.OrderNumber ?? "";
+                            break;
+                        case "材料":
+                            part = fileInfo.Material ?? "";
+                            break;
+                        case "数量":
+                            part = fileInfo.Quantity ?? "";
+                            break;
+                        case "工艺":
+                            part = fileInfo.Process ?? "";
+                            break;
+                        case "尺寸":
+                            part = fileInfo.Dimensions ?? "";
+                            break;
+                        case "序号":
+                            part = fileInfo.SerialNumber ?? "";
+                            break;
+                        case "列组合":
+                            part = fileInfo.CompositeColumn ?? "";
+                            break;
+                    }
+
+                    if (!string.IsNullOrEmpty(part))
+                    {
+                        parts.Add(part);
+                    }
+                }
+
+                return string.Join(separator, parts);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"[GenerateIdentifierPageContentForFile] 生成标识页失败: {fileInfo.OriginalName}");
+                return "";
+            }
+        }
+
+}
 }

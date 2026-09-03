@@ -23,6 +23,14 @@ namespace WindowsFormsApp3.Services
 
         private readonly IPdfInfoProvider _pdfInfoProvider;
 
+        /// <summary>
+        /// 判定页面尺寸是否为正方形（容差0.09mm）
+        /// </summary>
+        private static bool IsSquareDimension(float width, float height, float tolerance = 0.09f)
+        {
+            return Math.Abs(width - height) <= tolerance;
+        }
+
         #endregion
 
         #region 构造函数
@@ -401,7 +409,15 @@ namespace WindowsFormsApp3.Services
             bool useRotation = false;
             if (copyMode != CopyMode.FixedNoRotationByColumn && copyMode != CopyMode.FixedNoRotationByRow)
             {
-                useRotation = evenLayoutRotated > evenLayoutNormal;
+                if (IsSquareDimension(pageWidth, pageHeight, 0.09f))
+                {
+                    useRotation = false;
+                    LogHelper.Debug($"[ImpositionService] 一式N联平张: 尺寸 {pageWidth:F2}x{pageHeight:F2}mm 判定为正方形，默认锁定不旋转");
+                }
+                else
+                {
+                    useRotation = evenLayoutRotated > evenLayoutNormal;
+                }
             }
             var selectedResult = useRotation ? evenRotatedResult : evenNormalResult;
 
@@ -608,6 +624,13 @@ namespace WindowsFormsApp3.Services
             bool useRotation = false;
             if (copyMode != CopyMode.FixedNoRotationByColumn && copyMode != CopyMode.FixedNoRotationByRow)
             {
+                if (IsSquareDimension(pageWidth, pageHeight, 0.09f))
+                {
+                    useRotation = false;
+                    LogHelper.Debug($"[ImpositionService] 卷装一式N联: 尺寸 {pageWidth:F2}x{pageHeight:F2}mm 判定为正方形，默认锁定不旋转");
+                }
+                else
+                {
                 // 优先比较宽度利用率
                 if (Math.Abs(usedWidthRotated - usedWidthNormal) > 0.1f)
                 {
@@ -625,6 +648,7 @@ namespace WindowsFormsApp3.Services
                         // 列数也相同时比较空间利用率
                         useRotation = utilizationRotated > utilizationNormal;
                     }
+                }
                 }
             }
             
@@ -1231,7 +1255,12 @@ namespace WindowsFormsApp3.Services
             LogHelper.Debug($"[ImpositionService] 布局计算: 不旋转={columnsNormal}列×{rowsNormal}行={layoutNormal}页, 旋转90度={columnsRotated}列×{rowsRotated}行={layoutRotated}页");
 
             // 应用用户指定的行数或列数限制
-            bool useRotation = layoutRotated > layoutNormal;
+            bool isSquare = IsSquareDimension(pageWidth, pageHeight, 0.09f);
+            bool useRotation = !isSquare && (layoutRotated > layoutNormal);
+            if (isSquare)
+            {
+                LogHelper.Debug($"[ImpositionService] 平张布局: 尺寸 {pageWidth:F2}x{pageHeight:F2}mm 判定为正方形，默认锁定不旋转");
+            }
             int actualColumns = useRotation ? columnsRotated : columnsNormal;
             int actualRows = useRotation ? rowsRotated : rowsNormal;
 
@@ -1293,6 +1322,10 @@ namespace WindowsFormsApp3.Services
             var rotated = CreateFlatSheetCandidate(pageHeight, pageWidth, true);
 
             var candidates = new[] { normal, rotated }.Where(candidate => candidate.IsFeasible).ToList();
+            if (IsSquareDimension(pageWidth, pageHeight, 0.09f))
+            {
+                candidates = candidates.Where(candidate => !candidate.UseRotation).ToList();
+            }
             if (candidates.Count == 0)
             {
                 return CreateFailedResult(
@@ -1410,6 +1443,14 @@ namespace WindowsFormsApp3.Services
             }
             else
             {
+                // 默认自动模式：如果是正方形尺寸，直接锁定不旋转（0度）
+                if (IsSquareDimension(pageWidth, pageHeight, 0.09f))
+                {
+                    useRotation = false;
+                    LogHelper.Debug($"[ImpositionService] 卷装布局: 尺寸 {pageWidth:F2}x{pageHeight:F2}mm 判定为正方形，默认锁定不旋转");
+                }
+                else
+                {
                 // 自动选择逻辑：宽度利用率是最关键的，决定了能否充分利用卷材宽度
                 if (Math.Abs(widthUtilizationRotated - widthUtilizationNormal) > 0.1f) // 宽度利用率差异大于0.1%
                 {
@@ -1428,6 +1469,7 @@ namespace WindowsFormsApp3.Services
                         // 列数也相同，选择空间利用率更高的方案
                         useRotation = utilizationRotated > utilizationNormal;
                     }
+                }
                 }
             }
 
@@ -1503,6 +1545,11 @@ namespace WindowsFormsApp3.Services
             else if (rotationMode == RollRotationMode.Force270Degree)
             {
                 candidates = candidates.Where(candidate => candidate.UseRotation);
+            }
+            else if (IsSquareDimension(pageWidth, pageHeight, 0.09f))
+            {
+                // 默认模式下正方形优先不旋转
+                candidates = candidates.Where(candidate => !candidate.UseRotation);
             }
 
             var selectedCandidates = candidates.ToList();

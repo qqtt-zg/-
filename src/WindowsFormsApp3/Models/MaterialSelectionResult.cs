@@ -32,6 +32,7 @@ namespace WindowsFormsApp3.Models
         public string ExportPath { get; set; }
         public string OrderNumber { get; set; }
         public string Dimensions { get; set; }
+        public double SelectedTetBleed { get; set; } = 0;
         public string Process { get; set; }
         public string LayoutRows { get; set; }
         public string LayoutColumns { get; set; }
@@ -41,6 +42,7 @@ namespace WindowsFormsApp3.Models
         public string CornerRadius { get; set; }
         public bool NeedsRotation { get; set; }
         public int RotationAngle { get; set; }
+        public bool IsForceRotationEnabled { get; set; } = false;
         public bool EnableImposition { get; set; } = false;
         public LayoutMode LayoutMode { get; set; } = LayoutMode.Continuous;
         public int LayoutQuantity { get; set; } = 0;
@@ -53,6 +55,7 @@ namespace WindowsFormsApp3.Models
         public int DuplicateCount { get; set; }
         public string ImpositionMaterialType { get; set; }
         public string UpdatedRegexResult { get; set; }
+        public TemporaryImpositionParameters TemporaryImpositionParameters { get; set; }
 
         public bool IsApplyToAll { get; set; } = false;
         public OrderNumberMode OrderNumberMode { get; set; } = OrderNumberMode.None;

@@ -129,7 +129,7 @@ namespace WindowsFormsApp3.Tests.Services
         [Theory]
         [InlineData(100, 50, 0, "100x50")] // 无出血值
         [InlineData(100, 50, 3, "94x44")]   // 3mm 出血值: 100-6=94, 50-6=44
-        [InlineData(210, 297, 5, "200x287")] // A4 尺寸减去 5mm 出血: 210-10=200, 297-10=287
+        [InlineData(210, 297, 5, "287x200")] // A4 尺寸减去 5mm 出血且大数在前: 297-10=287, 210-10=200
         [InlineData(84.5, 54.5, 2, "80.5x50.5")] // 小数尺寸: 84.5-4=80.5, 54.5-4=50.5
         public void CalculateFinalDimensions_Should_Calculate_Correct_Dimensions(
             double width, double height, double bleed, string expected)

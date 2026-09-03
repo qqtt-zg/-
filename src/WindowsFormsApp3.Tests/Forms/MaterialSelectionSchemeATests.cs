@@ -9,6 +9,13 @@ namespace WindowsFormsApp3.Tests.Forms
 {
     public class MaterialSelectionSchemeATests
     {
+        public MaterialSelectionSchemeATests()
+        {
+            if (!WindowsFormsApp3.Utils.AppSettings.IsInitialized)
+            {
+                WindowsFormsApp3.Utils.AppSettings.Initialize(new WindowsFormsApp3.Services.FileLogger(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MaterialSelectionSchemeATests")));
+            }
+        }
         [Fact]
         public void ExtractOrderNumberByRegex_ShouldMatchFullFileName_WithExtension_ConsistentWithMainShell()
         {
@@ -168,11 +175,12 @@ namespace WindowsFormsApp3.Tests.Forms
 
                 Assert.Equal(3, form.BatchFileItems.Count);
                 Assert.Equal("SecondFile_54x84-200pcs.pdf", form.BatchFileItems[1].FileName);
-                Assert.Equal("200", form.BatchFileItems[1].Quantity);
+                // 仅保留 Excel 匹配，未匹配时统一默认赋值 1
+                Assert.Equal("1", form.BatchFileItems[1].Quantity);
                 Assert.Equal("2", form.BatchFileItems[1].SerialNumber);
 
                 Assert.Equal("ThirdFile_54x84-500pcs.pdf", form.BatchFileItems[2].FileName);
-                Assert.Equal("500", form.BatchFileItems[2].Quantity);
+                Assert.Equal("1", form.BatchFileItems[2].Quantity);
                 Assert.Equal("3", form.BatchFileItems[2].SerialNumber);
 
                 // 尝试重复追加已存在的文件，应自动去重
@@ -222,5 +230,124 @@ namespace WindowsFormsApp3.Tests.Forms
                 Assert.Equal(3, form.BatchFileItems[2].Index);
             }
         }
-    }
+    
+        [Fact]
+        public void SetPendingFiles_WhenQuantityUnmatched_ShouldDefaultToOne_NotContaminatedByQuantityTextBox()
+        {
+            using (var form = new MaterialSelectFormModern(
+                materials: new List<string> { "PET" },
+                fileName: @"C:\test\FirstFile_54x84-500pcs.pdf",
+                regexResult: "FirstFile",
+                opacity: 1.0,
+                width: "54",
+                height: "84",
+                excelData: null,
+                searchColumnIndex: -1,
+                returnColumnIndex: -1,
+                serialColumnIndex: -1,
+                newColumnIndex: -1,
+                serialNumber: "1"))
+            {
+                var handle = form.Handle;
+
+                // 此时右侧输入框即使有值
+                var qtyBox = form.Controls.Find("quantityTextBox", true).FirstOrDefault() as AntdUI.Input;
+                if (qtyBox != null)
+                {
+                    qtyBox.Text = "500";
+                }
+
+                // 设置批处理文件列表：仅保留Excel匹配，所有未匹配文件统一独立默认1，绝不被右侧数量框污染
+                form.SetPendingFiles(new[] {
+                    @"C:\test\File1_200pcs.pdf",
+                    @"C:\test\16 HYS000263 50张 YT-047 EF-081 YG-04609铭牌.pdf",
+                    @"C:\test\File3_PureName.pdf"
+                });
+
+                Assert.Equal(3, form.BatchFileItems.Count);
+                Assert.Equal("1", form.BatchFileItems[0].Quantity);
+                Assert.Equal("1", form.BatchFileItems[1].Quantity);
+                Assert.Equal("1", form.BatchFileItems[2].Quantity);
+            }
+        }
+
+        [Fact]
+        public void SetPendingFiles_WithExcelData_ShouldAutoFillMatchedQuantity_AndDefaultToOneForUnmatched()
+        {
+            var dt = new System.Data.DataTable();
+            dt.Columns.Add("ModelName", typeof(string));
+            dt.Columns.Add("Qty", typeof(string));
+            dt.Rows.Add("ItemA", "888");
+            dt.Rows.Add("ItemB", "999");
+
+            using (var form = new MaterialSelectFormModern(
+                materials: new List<string> { "PET" },
+                fileName: @"C:\test\Demo.pdf",
+                regexResult: "Demo",
+                opacity: 1.0,
+                width: "54",
+                height: "84",
+                excelData: dt,
+                searchColumnIndex: 0,
+                returnColumnIndex: 1,
+                serialColumnIndex: -1,
+                newColumnIndex: -1,
+                serialNumber: "1"))
+            {
+                var handle = form.Handle;
+
+                form.SetPendingFiles(new[] {
+                    @"C:\test\Job_ItemA_Label.pdf",
+                    @"C:\test\Job_ItemB_Label.pdf",
+                    @"C:\test\Job_ItemC_NotFound.pdf"
+                });
+
+                Assert.Equal(3, form.BatchFileItems.Count);
+                // ItemA 命中 Excel 第一行 -> 888
+                Assert.Equal("888", form.BatchFileItems[0].Quantity);
+                // ItemB 命中 Excel 第二行 -> 999
+                Assert.Equal("999", form.BatchFileItems[1].Quantity);
+                // ItemC 未在 Excel 命中 -> 独立默认 1
+                Assert.Equal("1", form.BatchFileItems[2].Quantity);
+            }
+        }
+
+
+        [Theory]
+        [InlineData("16 HYS000263 50张 YT-047 EF-081 YG-04609铭牌.pdf", "张", "50")]
+        [InlineData("19 HYS000164 80张 YT-047 EF-101  YG-04610铭牌.pdf", "张", "80")]
+        [InlineData("Order_Item_120个_Mat.pdf", "个", "120")]
+        [InlineData("Product_500F_Finish.pdf", "F", "500")]
+        public void RegexExtractQuantityByUnit_ShouldCorrectlyExtractNumber(string fileName, string unit, string expected)
+        {
+            string pattern = $@"(?<=^|[^\d])(\d+)\s*{Regex.Escape(unit)}";
+            var match = Regex.Match(fileName, pattern, RegexOptions.IgnoreCase);
+
+            Assert.True(match.Success);
+            Assert.Equal(expected, match.Groups[1].Value);
+        }
+
+        [Fact]
+        public void BatchQuantityIncrement_ShouldAccumulateOnCurrentQuantity()
+        {
+            var items = new List<BatchFileItem>
+            {
+                new BatchFileItem { Quantity = "50" },
+                new BatchFileItem { Quantity = "80" },
+                new BatchFileItem { Quantity = "1" }
+            };
+
+            int delta = 10;
+            foreach (var item in items)
+            {
+                int.TryParse(item.Quantity, out int cur);
+                item.Quantity = Math.Max(1, cur + delta).ToString();
+            }
+
+            Assert.Equal("60", items[0].Quantity);
+            Assert.Equal("90", items[1].Quantity);
+            Assert.Equal("11", items[2].Quantity);
+        }
+
+}
 }

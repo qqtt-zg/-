@@ -71,6 +71,50 @@ namespace WindowsFormsApp3.Tests.Services
             Assert.Contains("固定宽度", result.ErrorMessage);
         }
 
+        [Fact]
+        public async Task CalculateRollMaterialLayoutAsync_SquareSizeWithFloatVariance_ShouldDefaultToNoRotation()
+        {
+            var config = new RollMaterialConfiguration
+            {
+                FixedWidth = 320,
+                MinLength = 100,
+                MarginTop = 2,
+                MarginBottom = 2,
+                MarginLeft = 2,
+                MarginRight = 2
+            };
+
+            // 模拟 54.00345 x 54.00310 mm 的 CorelDRAW 铭牌正方形尺寸（差值 0.00035mm <= 0.09mm）
+            var pdfInfo = CreatePdfInfo(54.00345f, 54.00310f);
+            ImpositionResult result = await new ImpositionService().CalculateRollMaterialLayoutAsync(config, pdfInfo);
+
+            Assert.True(result.Success);
+            Assert.False(result.UseRotation);
+            Assert.Equal(0, result.RotationAngle);
+        }
+
+        [Fact]
+        public async Task CalculateRollMaterialLayoutAsync_SquareSize_ShouldRespectManualForce270Rotation()
+        {
+            var config = new RollMaterialConfiguration
+            {
+                FixedWidth = 320,
+                MinLength = 100,
+                MarginTop = 2,
+                MarginBottom = 2,
+                MarginLeft = 2,
+                MarginRight = 2
+            };
+
+            var pdfInfo = CreatePdfInfo(54.00345f, 54.00310f);
+            ImpositionResult result = await new ImpositionService().CalculateRollMaterialLayoutAsync(
+                config, pdfInfo, rotationMode: RollRotationMode.Force270Degree);
+
+            Assert.True(result.Success);
+            Assert.True(result.UseRotation);
+            Assert.Equal(270, result.RotationAngle);
+        }
+
         private static ImpositionPdfInfo CreatePdfInfo(float width, float height)
         {
             return new ImpositionPdfInfo

@@ -3386,11 +3386,7 @@ namespace WindowsFormsApp3
                     else if (savedMode == "RegexExtraction" || savedMode == "Regex" || savedMode == "2") savedMode = "正则提取";
                 }
 
-                string lastRegexName = AppSettings.LastSelectedRegex;
-                if (string.IsNullOrEmpty(lastRegexName) || !_orderRegexDict.ContainsKey(lastRegexName))
-                {
-                    lastRegexName = AppSettings.GetValue<string>("LastSelectedOrderRegexName");
-                }
+                string lastRegexName = AppSettings.GetValue<string>("LastSelectedOrderRegexName");
                 if ((string.IsNullOrEmpty(lastRegexName) || !_orderRegexDict.ContainsKey(lastRegexName)) && _orderRegexDict.Count > 0)
                 {
                     lastRegexName = _orderRegexDict.Keys.First();
@@ -3499,7 +3495,6 @@ namespace WindowsFormsApp3
             AppSettings.Set("OrderNumberMode1", "正则提取");
             AppSettings.Set("AutoIncrementOrderNumber1", false);
             AppSettings.Set("LastSelectedOrderRegexName", regexName);
-            AppSettings.LastSelectedRegex = regexName;
             AppSettings.Save();
 
             UpdateOrderModeButtonDisplay();
@@ -3894,6 +3889,27 @@ namespace WindowsFormsApp3
 
                 // 初始化左侧列表专属右键菜单
                 _batchContextMenu = new System.Windows.Forms.ContextMenuStrip();
+
+                var miExtractQty = new System.Windows.Forms.ToolStripMenuItem("从文件名提取数量...", null, (s, e) =>
+                {
+                    ShowBatchExtractQuantityDialog();
+                });
+                _batchContextMenu.Items.Add(miExtractQty);
+
+                var miAdjustQty = new System.Windows.Forms.ToolStripMenuItem("按当前数量批量增量...", null, (s, e) =>
+                {
+                    ShowBatchAdjustQuantityDialog();
+                });
+                _batchContextMenu.Items.Add(miAdjustQty);
+
+                var miSetQty = new System.Windows.Forms.ToolStripMenuItem("批量设置数量...", null, (s, e) =>
+                {
+                    ShowBatchSetQuantityDialog();
+                });
+                _batchContextMenu.Items.Add(miSetQty);
+
+                _batchContextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
+
                 var miPasteQty = new System.Windows.Forms.ToolStripMenuItem("从剪贴板批量粘贴数量", null, (s, e) =>
                 {
                     PasteQuantitiesFromClipboard();
@@ -3931,7 +3947,7 @@ namespace WindowsFormsApp3
                         FilePath = CurrentFileName,
                         FileName = Path.GetFileName(CurrentFileName),
                         OrderNumber = orderNumberTextBox?.Text ?? "",
-                        Quantity = quantityTextBox?.Text ?? "",
+                        Quantity = !string.IsNullOrEmpty(quantityTextBox?.Text) ? quantityTextBox.Text : "1",
                         SerialNumber = SerialNumber ?? "1",
                         Dimensions = AdjustedDimensions ?? "",
                         Shape = SelectedShape.ToString()
@@ -3985,7 +4001,7 @@ namespace WindowsFormsApp3
                     string quantity = MatchQuantityForFile(fileName);
                     if (string.IsNullOrEmpty(quantity))
                     {
-                        quantity = quantityTextBox?.Text ?? "";
+                        quantity = "1";
                     }
 
                     var item = new BatchFileItem
@@ -4064,7 +4080,7 @@ namespace WindowsFormsApp3
                     string quantity = MatchQuantityForFile(fileName);
                     if (string.IsNullOrEmpty(quantity))
                     {
-                        quantity = quantityTextBox?.Text ?? "";
+                        quantity = "1";
                     }
 
                     int newIndex = _batchItems.Count + 1;
@@ -4103,14 +4119,7 @@ namespace WindowsFormsApp3
         {
             if (string.IsNullOrWhiteSpace(fileName)) return "";
 
-            // 1. 从文件名正则匹配例如 -100pcs, -500PCS
-            var match = Regex.Match(fileName, @"-(\d+)\s*pcs", RegexOptions.IgnoreCase);
-            if (match.Success)
-            {
-                return match.Groups[1].Value;
-            }
-
-            // 2. 如果有 Excel 数据，尝试按 searchColumnIndex 匹配
+            // 仅保留 Excel 表格数据匹配；未匹配到的文件统一独立保持默认值 "1"（文件名提取迁移至右键菜单由用户主动调用）
             if (_excelData != null && _searchColumnIndex >= 0 && _returnColumnIndex >= 0)
             {
                 string pureName = Path.GetFileNameWithoutExtension(fileName);
@@ -4294,6 +4303,197 @@ namespace WindowsFormsApp3
             {
                 LogHelper.Error($"[MaterialSelectFormModern] 批量粘贴数量失败: {ex.Message}", ex);
             }
+        }
+
+        /// <summary>
+        /// 从文件名提取数量对话框（支持自定义单位，如'张'、'个'、'pcs'）
+        /// </summary>
+        private void ShowBatchExtractQuantityDialog()
+        {
+            if (_batchItems.Count == 0) return;
+
+            using (var inputForm = new Form())
+            {
+                inputForm.Text = "从文件名提取数量";
+                inputForm.Width = 340;
+                inputForm.Height = 180;
+                inputForm.StartPosition = FormStartPosition.CenterParent;
+                inputForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                inputForm.MaximizeBox = false;
+                inputForm.MinimizeBox = false;
+
+                var label = new System.Windows.Forms.Label { Text = "请输入单位字符 (如 '张', '个', 'pcs'):\n将从文件名中提取该单位前的一组数字。", Left = 15, Top = 15, Width = 295, Height = 40 };
+                var textBox = new System.Windows.Forms.TextBox { Left = 15, Top = 60, Width = 295, Text = "张" };
+                var okButton = new System.Windows.Forms.Button { Text = "确定", Left = 60, Top = 95, Width = 90, DialogResult = DialogResult.OK };
+                var cancelButton = new System.Windows.Forms.Button { Text = "取消", Left = 170, Top = 95, Width = 90, DialogResult = DialogResult.Cancel };
+
+                inputForm.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
+                inputForm.AcceptButton = okButton;
+                inputForm.CancelButton = cancelButton;
+
+                if (inputForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    string unit = textBox.Text.Trim();
+                    if (string.IsNullOrEmpty(unit))
+                    {
+                        MessageBox.Show("单位字符不能为空", "提示", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        return;
+                    }
+
+                    var targetRows = GetSelectedBatchRows();
+                    if (targetRows.Count == 0)
+                    {
+                        targetRows = Enumerable.Range(0, _batchItems.Count).ToList();
+                    }
+
+                    string pattern = $@"(?<=^|[^\d])(\d+)\s*{Regex.Escape(unit)}";
+                    int successCount = 0;
+
+                    foreach (int r in targetRows)
+                    {
+                        if (r >= 0 && r < _batchItems.Count)
+                        {
+                            var item = _batchItems[r];
+                            var match = Regex.Match(item.FileName ?? "", pattern, RegexOptions.IgnoreCase);
+                            if (match.Success)
+                            {
+                                item.Quantity = match.Groups[1].Value;
+                                successCount++;
+                            }
+                        }
+                    }
+
+                    dgvBatchFiles?.Refresh();
+                    LogHelper.Info($"[MaterialSelectFormModern] 自定义单位 '{unit}' 从文件名提取完成，更新了 {successCount} 款文件的数量");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 按当前数量批量增量
+        /// </summary>
+        private void ShowBatchAdjustQuantityDialog()
+        {
+            if (_batchItems.Count == 0) return;
+
+            using (var inputForm = new Form())
+            {
+                inputForm.Text = "按当前数量批量增量";
+                inputForm.Width = 320;
+                inputForm.Height = 170;
+                inputForm.StartPosition = FormStartPosition.CenterParent;
+                inputForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                inputForm.MaximizeBox = false;
+                inputForm.MinimizeBox = false;
+
+                var label = new System.Windows.Forms.Label { Text = "请输入增量值 (正数增加，负数减少，如 10 或 -5):", Left = 15, Top = 15, Width = 280, Height = 35 };
+                var textBox = new System.Windows.Forms.TextBox { Left = 15, Top = 55, Width = 275, Text = "1" };
+                var okButton = new System.Windows.Forms.Button { Text = "确定", Left = 50, Top = 90, Width = 90, DialogResult = DialogResult.OK };
+                var cancelButton = new System.Windows.Forms.Button { Text = "取消", Left = 160, Top = 90, Width = 90, DialogResult = DialogResult.Cancel };
+
+                inputForm.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
+                inputForm.AcceptButton = okButton;
+                inputForm.CancelButton = cancelButton;
+
+                if (inputForm.ShowDialog(this) == DialogResult.OK && int.TryParse(textBox.Text, out int delta))
+                {
+                    var targetRows = GetSelectedBatchRows();
+                    if (targetRows.Count == 0)
+                    {
+                        targetRows = Enumerable.Range(0, _batchItems.Count).ToList();
+                    }
+
+                    int updated = 0;
+                    foreach (int r in targetRows)
+                    {
+                        if (r >= 0 && r < _batchItems.Count)
+                        {
+                            var item = _batchItems[r];
+                            int.TryParse(item.Quantity, out int curQty);
+                            int newQty = Math.Max(1, curQty + delta);
+                            item.Quantity = newQty.ToString();
+                            updated++;
+                        }
+                    }
+
+                    dgvBatchFiles?.Refresh();
+                    LogHelper.Info($"[MaterialSelectFormModern] 批量增量 {delta} 完成，更新了 {updated} 款文件");
+                }
+            }
+        }
+
+        /// <summary>
+        /// 批量覆盖设置数量
+        /// </summary>
+        private void ShowBatchSetQuantityDialog()
+        {
+            if (_batchItems.Count == 0) return;
+
+            using (var inputForm = new Form())
+            {
+                inputForm.Text = "批量设置数量";
+                inputForm.Width = 300;
+                inputForm.Height = 160;
+                inputForm.StartPosition = FormStartPosition.CenterParent;
+                inputForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                inputForm.MaximizeBox = false;
+                inputForm.MinimizeBox = false;
+
+                var label = new System.Windows.Forms.Label { Text = "请输入统一设置的数量:", Left = 15, Top = 15, Width = 250, Height = 25 };
+                var textBox = new System.Windows.Forms.TextBox { Left = 15, Top = 45, Width = 250, Text = "1" };
+                var okButton = new System.Windows.Forms.Button { Text = "确定", Left = 40, Top = 80, Width = 90, DialogResult = DialogResult.OK };
+                var cancelButton = new System.Windows.Forms.Button { Text = "取消", Left = 150, Top = 80, Width = 90, DialogResult = DialogResult.Cancel };
+
+                inputForm.Controls.AddRange(new Control[] { label, textBox, okButton, cancelButton });
+                inputForm.AcceptButton = okButton;
+                inputForm.CancelButton = cancelButton;
+
+                if (inputForm.ShowDialog(this) == DialogResult.OK)
+                {
+                    string val = textBox.Text.Trim();
+                    if (int.TryParse(val, out int num) && num > 0)
+                    {
+                        var targetRows = GetSelectedBatchRows();
+                        if (targetRows.Count == 0)
+                        {
+                            targetRows = Enumerable.Range(0, _batchItems.Count).ToList();
+                        }
+
+                        foreach (int r in targetRows)
+                        {
+                            if (r >= 0 && r < _batchItems.Count)
+                            {
+                                _batchItems[r].Quantity = num.ToString();
+                            }
+                        }
+
+                        dgvBatchFiles?.Refresh();
+                    }
+                }
+            }
+        }
+
+        private List<int> GetSelectedBatchRows()
+        {
+            var rows = new HashSet<int>();
+            if (dgvBatchFiles != null)
+            {
+                foreach (DataGridViewCell cell in dgvBatchFiles.SelectedCells)
+                {
+                    if (cell.RowIndex >= 0 && cell.RowIndex < _batchItems.Count)
+                    {
+                        rows.Add(cell.RowIndex);
+                    }
+                }
+                foreach (DataGridViewRow row in dgvBatchFiles.SelectedRows)
+                {
+                    if (row.Index >= 0 && row.Index < _batchItems.Count)
+                    {
+                        rows.Add(row.Index);
+                    }
+                }
+            }
+            return rows.OrderBy(r => r).ToList();
         }
 
         /// <summary>
@@ -4570,7 +4770,7 @@ namespace WindowsFormsApp3
                     item.Shape = ((int)SelectedShape).ToString();
                     if (string.IsNullOrEmpty(item.Quantity))
                     {
-                        item.Quantity = quantityTextBox?.Text ?? "";
+                        item.Quantity = "1";
                     }
                 }
             }
@@ -9005,6 +9205,15 @@ namespace WindowsFormsApp3
         /// 获取页面旋转角度（从布局计算结果中）
         /// </summary>
         /// <returns>旋转角度（0°或270°）</returns>
+        /// <summary>
+        /// 获取本次使用的临时排版参数副本
+        /// </summary>
+        public TemporaryImpositionParameters GetTemporaryImpositionParameters()
+        {
+            EnsureTemporaryImpositionParameters();
+            return _temporaryImpositionParameters?.Clone();
+        }
+
         public int GetRotationAngle()
         {
             // 从排版计算结果中获取旋转角度
@@ -9384,6 +9593,11 @@ namespace WindowsFormsApp3
         /// 卷装强制旋转标志
         /// </summary>
         private bool _forceRotationEnabled = false;
+
+        /// <summary>
+        /// 是否处于强制旋转状态
+        /// </summary>
+        public bool IsForceRotationEnabled => _forceRotationEnabled;
 
         /// <summary>
         /// 旋转角度标签点击事件 - 切换旋转角度（0度 <-> 270度）
