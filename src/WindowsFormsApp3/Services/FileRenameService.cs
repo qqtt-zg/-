@@ -425,7 +425,7 @@ namespace WindowsFormsApp3.Services
             }
 
             // 如果没有PDF处理选项，直接使用原有的简单重命名方法
-            if (pdfOptions == null || (!pdfOptions.AddPdfLayers && !pdfOptions.AddIdentifierPage))
+            if (pdfOptions == null || (!pdfOptions.AddPdfLayers && !pdfOptions.AddIdentifierPage && pdfOptions.RotationAngle == 0 && !(pdfOptions.LayoutMode == LayoutMode.Folding && pdfOptions.LayoutQuantity > 0)))
             {
                 LogHelper.Debug("没有PDF处理需求，使用标准重命名方法");
                 return await RenameFileImmediatelyAsync(fileInfo, exportPath, isCopyMode, cancellationToken);
@@ -783,7 +783,7 @@ namespace WindowsFormsApp3.Services
             }
 
             // 如果没有PDF处理选项，直接使用原有的简单重命名方法
-            if (pdfOptions == null || (!pdfOptions.AddPdfLayers && !pdfOptions.AddIdentifierPage))
+            if (pdfOptions == null || (!pdfOptions.AddPdfLayers && !pdfOptions.AddIdentifierPage && pdfOptions.RotationAngle == 0 && !(pdfOptions.LayoutMode == LayoutMode.Folding && pdfOptions.LayoutQuantity > 0)))
             {
                 LogHelper.Debug("没有PDF处理需求，使用标准重命名方法");
                 return RenameFileImmediately(fileInfo, exportPath, isCopyMode);

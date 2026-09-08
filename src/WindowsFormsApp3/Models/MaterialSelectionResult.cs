@@ -12,6 +12,10 @@ namespace WindowsFormsApp3.Models
     public class BatchFileItem
     {
         public int Index { get; set; }
+        public bool IsSelected { get; set; } = false;
+        public bool IsLocked { get; set; } = false;
+        public string GroupId { get; set; } = "";
+        public string GroupName { get; set; } = "";
         public string FilePath { get; set; }
         public string FileName { get; set; }
         public string OrderNumber { get; set; }
@@ -20,6 +24,43 @@ namespace WindowsFormsApp3.Models
         public string RegexResult { get; set; }
         public string Dimensions { get; set; }
         public string Shape { get; set; }
+       public string Material { get; set; } = "";
+       public string Process { get; set; } = "";
+        public string ColorMode { get; set; } = "";
+        public string FilmType { get; set; } = "";
+        public string MaterialType { get; set; } = "";
+        public string LayoutPattern { get; set; } = "";
+        public string RoundRadius { get; set; } = "";
+        public string ImpositionMode { get; set; } = "";
+        public string LayoutInfo { get; set; } = "";
+        public bool IsPreserveJob { get; set; } = false;
+        public string PreservePrefix { get; set; } = "";
+        public double RawPdfWidth { get; set; } = 0;
+        public double RawPdfHeight { get; set; } = 0;
+        public string ExportPath { get; set; } = "";
+    }
+
+    /// <summary>
+    /// 智能工艺分组实体（按相同材料、覆膜工艺、切刀形状等参数聚合）
+    /// </summary>
+    public class BatchProcessGroup
+    {
+        public string GroupId { get; set; } = System.Guid.NewGuid().ToString("N");
+        public string GroupName { get; set; } = "【新单工艺组 1】";
+        public bool IsPreserveGroup { get; set; } = false;
+        public bool IsLocked { get; set; } = false;
+        public bool IsCollapsed { get; set; } = false;
+        public string Material { get; set; } = "";
+       public string Process { get; set; } = "";
+        public string ColorMode { get; set; } = "";
+        public string FilmType { get; set; } = "";
+        public string MaterialType { get; set; } = "";
+        public string LayoutPattern { get; set; } = "";
+       public string Shape { get; set; } = "";
+       public string RoundRadius { get; set; } = "";
+        public string ImpositionMode { get; set; } = "";
+        public string ExportPath { get; set; } = "";
+        public List<BatchFileItem> Items { get; set; } = new List<BatchFileItem>();
     }
 
     public class MaterialSelectionResult
@@ -62,11 +103,13 @@ namespace WindowsFormsApp3.Models
         public string SelectedOrderRegexName { get; set; } = "";
         public string SelectedOrderRegexPattern { get; set; } = "";
         public List<BatchFileItem> BatchItems { get; set; } = new List<BatchFileItem>();
+        public List<BatchProcessGroup> ProcessGroups { get; set; } = new List<BatchProcessGroup>();
 
         public MaterialSelectionResult()
         {
             ColumnValues = new Dictionary<string, string>();
             BatchItems = new List<BatchFileItem>();
+            ProcessGroups = new List<BatchProcessGroup>();
         }
     }
 }

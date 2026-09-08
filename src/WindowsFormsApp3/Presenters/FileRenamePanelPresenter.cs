@@ -1030,8 +1030,8 @@ namespace WindowsFormsApp3.Presenters
                         };
                     }
 
-                    // 填充参数
-                    currentFileInfo.Material = selectionResult.SelectedMaterial;
+                    // 填充参数：优先采用分组赋权或返单工艺，未锁定时回退全局选参
+                    currentFileInfo.Material = (!string.IsNullOrEmpty(item.Material) && item.IsLocked) ? item.Material : selectionResult.SelectedMaterial;
                     currentFileInfo.OrderNumber = item.OrderNumber ?? "";
                     currentFileInfo.Quantity = item.Quantity ?? "";
                     currentFileInfo.SerialNumber = item.SerialNumber ?? (i + 1).ToString();
@@ -1065,8 +1065,27 @@ namespace WindowsFormsApp3.Presenters
                         currentFileInfo.Dimensions = dim;
                         currentFileInfo.Shape = shape;
                     }
-                    currentFileInfo.Process = selectionResult.Process ?? "";
+                    currentFileInfo.Process = (!string.IsNullOrEmpty(item.Process) && item.IsLocked) ? item.Process : (selectionResult.Process ?? "");
                     currentFileInfo.ImpositionMode = GetImpositionModeString();
+
+                    // ✅ 对齐单个文件：从Excel匹配列组合数据（若有匹配行则赋值，确保文件名和表格完整一致）
+                    if (_view.ExcelData != null)
+                    {
+                        string regexForMatching = GetRegexResultForMatching(currentFileInfo);
+                        var matchDataList = MatchExcelData(regexForMatching);
+                        if (matchDataList != null && matchDataList.Count > 0)
+                        {
+                            var matchData = matchDataList[0];
+                            if (!string.IsNullOrEmpty(matchData.CompositeColumn))
+                            {
+                                currentFileInfo.CompositeColumn = matchData.CompositeColumn;
+                            }
+                            if (string.IsNullOrEmpty(currentFileInfo.Material) && !string.IsNullOrEmpty(matchData.Material))
+                            {
+                                currentFileInfo.Material = matchData.Material;
+                            }
+                        }
+                    }
 
                     // ✅ 关键升级：完全对齐单个文件的排版计算逻辑
                     // 1. 调用 AnalyzePdfFileAsync 获取该文件的真实物理尺寸、CropBox、页面旋转角
@@ -1653,17 +1672,61 @@ namespace WindowsFormsApp3.Presenters
                                 AddFileToTable(currentFileInfo);
                             }));
                             
-                            // 执行文件操作（第一个移动/复制原文件，后续复制原文件）
+                            // 执行文件操作（每个分裂文件均统一调用 RenameFileAsync，确保各自独立执行完整的图层过滤与 PDF 处理）
                             bool success;
                             if (i == 0)
                             {
-                                // 第一个文件：使用原文件
+                                // 第一个文件：使用原文件直接处理与重命名
                                 success = await RenameFileAsync(currentFileInfo);
                             }
                             else
                             {
-                                // 后续文件：复制原文件到目标位置
-                                success = await CopyFileToDestinationAsync(filePath, currentFileInfo);
+                                // 后续分裂文件：先安全复制源文件为独立副本，再调用统一的 RenameFileAsync 进行图层过滤与处理
+                                string splitTempPath = Path.Combine(Path.GetTempPath(), $"split_{Guid.NewGuid():N}_{Path.GetFileName(filePath)}");
+                                try
+                                {
+                                    File.Copy(filePath, splitTempPath, overwrite: true);
+                                    var splitFileInfo = new FileRenameInfo
+                                    {
+                                        OriginalName = currentFileInfo.OriginalName,
+                                        FullPath = splitTempPath,
+                                        FileExtension = currentFileInfo.FileExtension,
+                                        NewName = currentFileInfo.NewName,
+                                        Material = currentFileInfo.Material,
+                                        Quantity = currentFileInfo.Quantity,
+                                        SerialNumber = currentFileInfo.SerialNumber,
+                                        Dimensions = currentFileInfo.Dimensions,
+                                        Shape = currentFileInfo.Shape,
+                                        Process = currentFileInfo.Process,
+                                        LayoutRows = currentFileInfo.LayoutRows,
+                                        LayoutColumns = currentFileInfo.LayoutColumns,
+                                        CompositeColumn = currentFileInfo.CompositeColumn,
+                                        RegexResult = currentFileInfo.RegexResult,
+                                        OrderNumber = currentFileInfo.OrderNumber,
+                                        ImpositionMode = currentFileInfo.ImpositionMode,
+                                        FlatSheetLayoutCount = currentFileInfo.FlatSheetLayoutCount,
+                                        RollMaterialLayoutCount = currentFileInfo.RollMaterialLayoutCount
+                                    };
+
+                                    // 强制走 RenameFileAsync 完整管道（含图层过滤、标识页、折手空白页等）
+                                    success = await RenameFileAsync(splitFileInfo);
+                                    if (success)
+                                    {
+                                        currentFileInfo.FullPath = splitFileInfo.FullPath;
+                                    }
+                                }
+                                catch (Exception splitEx)
+                                {
+                                    _logger?.LogError(splitEx, $"[ProcessNewFileAsync] 分裂文件处理失败: {currentFileInfo.NewName}");
+                                    success = false;
+                                }
+                                finally
+                                {
+                                    if (File.Exists(splitTempPath))
+                                    {
+                                        try { File.Delete(splitTempPath); } catch { }
+                                    }
+                                }
                             }
                             
                             if (success) successCount++;

@@ -1,0 +1,6 @@
+{
+  "scope": "user",
+  "mcpMode": "none",
+  "installMode": "legacy",
+  "mergeAgents": true
+}

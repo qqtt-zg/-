@@ -16,6 +16,7 @@ using WindowsFormsApp3.Interfaces;
 using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Forms.Main;
+using WindowsFormsApp3.Forms.Controls;
 using Newtonsoft.Json;
 
 namespace WindowsFormsApp3
@@ -244,19 +245,21 @@ namespace WindowsFormsApp3
 
         // 左侧批量文件列表面板
         private System.Windows.Forms.Panel pnlFileList;
+        private System.Windows.Forms.Panel pnlTopBatchHeader;
+        private System.Windows.Forms.Panel pnlBottomToolbar;
+        private System.Windows.Forms.Panel pnlCardsContainer;
         private System.Windows.Forms.DataGridView dgvBatchFiles;
         private System.Windows.Forms.ContextMenuStrip _batchContextMenu;
         private Rectangle _dragBoxFromMouseDown;
         private int _rowIndexFromMouseDown = -1;
         private AntdUI.Button btnMoveUp;
         private AntdUI.Button btnMoveDown;
-        private AntdUI.Button btnSortAsc;
-        private AntdUI.Button btnSortDesc;
+        private AntdUI.Button btnNewGroupDirect;
         private AntdUI.Label lblBatchTitle;
         private System.Windows.Forms.Label lblBatchHelp;
         private BindingList<BatchFileItem> _batchItems = new BindingList<BatchFileItem>();
         private bool _isBatchPanelExpanded = false;
-        private const int BATCH_PANEL_WIDTH = 420;
+        private const int BATCH_PANEL_WIDTH = 520;
 
         public bool IsApplyToAll { get; private set; } = false;
         public List<BatchFileItem> BatchFileItems => _batchItems.ToList();
@@ -1379,6 +1382,7 @@ namespace WindowsFormsApp3
 
                     // 更新尺寸显示（形状变化可能影响最终尺寸）
                     UpdateDimensionsWithBleed();
+                    SyncCurrentSelectionsToActiveGroup();
                     return;
                 }
 
@@ -1464,6 +1468,7 @@ namespace WindowsFormsApp3
 
                 // 更新尺寸显示（形状变化可能影响最终尺寸）
                 UpdateDimensionsWithBleed();
+                SyncCurrentSelectionsToActiveGroup();
             }
             catch (Exception ex)
             {
@@ -1893,6 +1898,7 @@ namespace WindowsFormsApp3
 
                     // 保存选择的导出路径到设置
                     SaveSelectedExportPath();
+                    SyncCurrentSelectionsToActiveGroup();
 
                     LogHelper.Debug($"选择导出路径: {SelectedExportPath}");
                 }
@@ -2318,6 +2324,7 @@ namespace WindowsFormsApp3
                         AppSettings.Save();
 
                         LogHelper.Debug($"取消选择材料: {clickedButton.Text}");
+                        SyncCurrentSelectionsToActiveGroup();
                     }
                 else
                 {
@@ -2347,6 +2354,7 @@ namespace WindowsFormsApp3
                     AppSettings.Save();
 
                     LogHelper.Debug($"选择材料: {SelectedMaterial}");
+                    SyncCurrentSelectionsToActiveGroup();
                 }
                 }
                 else
@@ -2403,6 +2411,7 @@ namespace WindowsFormsApp3
                         AppSettings.Save();
 
                         LogHelper.Debug("通过'取消选择'选项清空材料选择");
+                        SyncCurrentSelectionsToActiveGroup();
                         return;
                     }
 
@@ -2440,6 +2449,7 @@ namespace WindowsFormsApp3
                         AppSettings.Save();
 
                         LogHelper.Debug($"取消选择材料: {selectedMaterial}");
+                        SyncCurrentSelectionsToActiveGroup();
                     }
                     else
                     {
@@ -2469,6 +2479,7 @@ namespace WindowsFormsApp3
                         AppSettings.Save();
 
                         LogHelper.Debug($"从下拉框选择材料: {SelectedMaterial}");
+                        SyncCurrentSelectionsToActiveGroup();
                     }
                 }
             }
@@ -2571,6 +2582,7 @@ namespace WindowsFormsApp3
             {
                 FixedField = ColorMode + FilmType;
             }
+            SyncCurrentSelectionsToActiveGroup();
         }
 
         private void SaveFormData()
@@ -3711,6 +3723,7 @@ namespace WindowsFormsApp3
                 }
 
                 dgvBatchFiles?.Refresh();
+                RefreshAllCardsData();
             }
             catch (Exception ex)
             {
@@ -3741,82 +3754,76 @@ namespace WindowsFormsApp3
                     Visible = false
                 };
 
-                // 顶部工具栏
-                var toolbarPanel = new System.Windows.Forms.Panel
+                // 1. 顶部状态标题栏
+                pnlTopBatchHeader = new System.Windows.Forms.Panel
                 {
                     Dock = DockStyle.Top,
-                    Height = 40,
-                    BackColor = Color.FromArgb(240, 242, 245)
+                    Height = 36,
+                    BackColor = Color.FromArgb(240, 242, 245),
+                    Padding = new Padding(8, 6, 8, 6)
                 };
-
                 lblBatchTitle = new AntdUI.Label
                 {
-                    Text = "待处理文件列表",
-                    Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Bold),
-                    Location = new Point(10, 8),
-                    Size = new Size(130, 24)
+                    Text = "待处理 (0款 · 0组)",
+                    Font = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Bold),
+                    ForeColor = Color.FromArgb(38, 38, 38),
+                    Dock = DockStyle.Fill
                 };
+                pnlTopBatchHeader.Controls.Add(lblBatchTitle);
 
+                // 2. 底部操作工具栏（排序改由点击列头完成）
+                pnlBottomToolbar = new System.Windows.Forms.Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 38,
+                    BackColor = Color.FromArgb(245, 247, 250),
+                    Padding = new Padding(6, 4, 6, 4)
+                };
                 btnMoveUp = new AntdUI.Button
                 {
                     Text = "▲ 上移",
-                    Location = new Point(145, 6),
-                    Size = new Size(60, 28),
+                    Location = new Point(8, 5),
+                    Size = new Size(62, 28),
                     Font = new Font("Microsoft YaHei UI", 8.5F),
                     BorderWidth = 1F,
                     WaveSize = 0
                 };
                 btnMoveUp.Click += BtnMoveUp_Click;
-
                 btnMoveDown = new AntdUI.Button
                 {
                     Text = "▼ 下移",
-                    Location = new Point(210, 6),
-                    Size = new Size(60, 28),
+                    Location = new Point(74, 5),
+                    Size = new Size(62, 28),
                     Font = new Font("Microsoft YaHei UI", 8.5F),
                     BorderWidth = 1F,
                     WaveSize = 0
                 };
                 btnMoveDown.Click += BtnMoveDown_Click;
-
-                btnSortAsc = new AntdUI.Button
+                btnNewGroupDirect = new AntdUI.Button
                 {
-                    Text = "A-Z 升序",
-                    Location = new Point(275, 6),
-                    Size = new Size(68, 28),
-                    Font = new Font("Microsoft YaHei UI", 8.5F),
+                    Text = "➕ 分出新组",
+                    Location = new Point(142, 5),
+                    Size = new Size(88, 28),
+                    Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold),
+                    Type = AntdUI.TTypeMini.Primary,
                     BorderWidth = 1F,
                     WaveSize = 0
                 };
-                btnSortAsc.Click += BtnSortAsc_Click;
+                btnNewGroupDirect.Click += (s, e) => CreateGroupFromSelectedFiles();
+                pnlBottomToolbar.Controls.Add(btnMoveUp);
+                pnlBottomToolbar.Controls.Add(btnMoveDown);
+                pnlBottomToolbar.Controls.Add(btnNewGroupDirect);
 
-                btnSortDesc = new AntdUI.Button
-                {
-                    Text = "Z-A 降序",
-                    Location = new Point(347, 6),
-                    Size = new Size(68, 28),
-                    Font = new Font("Microsoft YaHei UI", 8.5F),
-                    BorderWidth = 1F,
-                    WaveSize = 0
-                };
-                btnSortDesc.Click += BtnSortDesc_Click;
-
-                toolbarPanel.Controls.Add(lblBatchTitle);
-                toolbarPanel.Controls.Add(btnMoveUp);
-                toolbarPanel.Controls.Add(btnMoveDown);
-                toolbarPanel.Controls.Add(btnSortAsc);
-                toolbarPanel.Controls.Add(btnSortDesc);
-
-                // 底部提示栏
+                // 3. 最底部帮助提示栏
                 var bottomHelpPanel = new System.Windows.Forms.Panel
                 {
                     Dock = DockStyle.Bottom,
-                    Height = 32,
+                    Height = 28,
                     BackColor = Color.FromArgb(240, 242, 245)
                 };
                 lblBatchHelp = new System.Windows.Forms.Label
                 {
-                    Text = "💡 提示: 数量列可直接编辑；选中行按 Ctrl+V 批量向下粘贴多行数量",
+                    Text = "点击序号列选中整行，支持 Ctrl/Shift 多选；点击列头排序；右键数量列提取数量",
                     Font = new Font("Microsoft YaHei UI", 8F),
                     ForeColor = Color.DimGray,
                     Dock = DockStyle.Fill,
@@ -3824,6 +3831,16 @@ namespace WindowsFormsApp3
                     Padding = new Padding(8, 0, 0, 0)
                 };
                 bottomHelpPanel.Controls.Add(lblBatchHelp);
+
+                // 4. 流式卡片组容器
+                pnlCardsContainer = new System.Windows.Forms.Panel
+                {
+                    Name = "pnlCardsContainer",
+                    Dock = DockStyle.Fill,
+                    AutoScroll = true,
+                    BackColor = Color.FromArgb(245, 247, 250),
+                    Padding = new Padding(6, 6, 6, 6)
+                };
 
                 // 表格 DataGridView
                 dgvBatchFiles = new System.Windows.Forms.DataGridView
@@ -3916,9 +3933,12 @@ namespace WindowsFormsApp3
                 });
                 _batchContextMenu.Items.Add(miPasteQty);
 
-                pnlFileList.Controls.Add(dgvBatchFiles);
-                pnlFileList.Controls.Add(toolbarPanel);
+                dgvBatchFiles.Visible = false;
+                pnlFileList.Controls.Add(pnlCardsContainer);
+                pnlFileList.Controls.Add(pnlTopBatchHeader);
+                pnlFileList.Controls.Add(pnlBottomToolbar);
                 pnlFileList.Controls.Add(bottomHelpPanel);
+                pnlFileList.Controls.Add(dgvBatchFiles);
 
                 this.Controls.Add(pnlFileList);
                 pnlFileList.BringToFront();
@@ -3933,6 +3953,54 @@ namespace WindowsFormsApp3
         }
 
         /// <summary>
+        /// 刷新左侧面板顶部标题摘要（如：待处理 (14款 · 2组)）
+        /// </summary>
+        public void RefreshGroupSummaryHeader()
+        {
+            try
+            {
+                int totalFiles = _processGroups?.Sum(g => g.Items?.Count ?? 0) ?? 0;
+                int groupsCount = _processGroups?.Count ?? 0;
+                if (lblBatchTitle != null)
+                {
+                    lblBatchTitle.Text = $"待处理 ({totalFiles}款 · {groupsCount}组)";
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// 刷新所有卡片内表格与组头数据显示
+        /// </summary>
+        public void RefreshAllCardsData()
+        {
+            try
+            {
+                if (pnlCardsContainer == null) return;
+                foreach (Control c in pnlCardsContainer.Controls)
+                {
+                    if (c is System.Windows.Forms.Panel card)
+                    {
+                        foreach (Control sub in card.Controls)
+                        {
+                            if (sub is DataGridView dgv)
+                            {
+                                dgv.Refresh();
+                            }
+                            else if (sub is BatchGroupHeaderCard header)
+                            {
+                                header.UpdateCardStyle();
+                                header.Invalidate();
+                            }
+                        }
+                    }
+                }
+                RefreshGroupSummaryHeader();
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// 确保当前文件及同批待处理文件在批量列表中
         /// </summary>
         private void EnsureCurrentFileInBatchList()
@@ -3941,6 +4009,7 @@ namespace WindowsFormsApp3
             {
                 if (_batchItems.Count == 0 && !string.IsNullOrEmpty(CurrentFileName))
                 {
+                    string itemDimensions = ResolveFileDimensions(CurrentFileName, Path.GetFileName(CurrentFileName), out double rw, out double rh);
                     _batchItems.Add(new BatchFileItem
                     {
                         Index = 1,
@@ -3949,7 +4018,9 @@ namespace WindowsFormsApp3
                         OrderNumber = orderNumberTextBox?.Text ?? "",
                         Quantity = !string.IsNullOrEmpty(quantityTextBox?.Text) ? quantityTextBox.Text : "1",
                         SerialNumber = SerialNumber ?? "1",
-                        Dimensions = AdjustedDimensions ?? "",
+                        Dimensions = itemDimensions,
+                        RawPdfWidth = rw,
+                        RawPdfHeight = rh,
                         Shape = SelectedShape.ToString()
                     });
                 }
@@ -4004,6 +4075,7 @@ namespace WindowsFormsApp3
                         quantity = "1";
                     }
 
+                    string itemDimensions = ResolveFileDimensions(filePath, fileName, out double rw, out double rh);
                     var item = new BatchFileItem
                     {
                         Index = i + 1,
@@ -4011,7 +4083,9 @@ namespace WindowsFormsApp3
                         FileName = fileName,
                         Quantity = quantity,
                         SerialNumber = (startSerial + i).ToString(),
-                        Dimensions = AdjustedDimensions ?? "",
+                        Dimensions = itemDimensions,
+                        RawPdfWidth = rw,
+                        RawPdfHeight = rh,
                         Shape = SelectedShape.ToString()
                     };
 
@@ -4019,10 +4093,9 @@ namespace WindowsFormsApp3
                 }
 
                 UpdateBatchOrderNumbers();
-                if (lblBatchTitle != null)
-                {
-                    lblBatchTitle.Text = $"待处理文件 ({_batchItems.Count} 款)";
-                }
+                RebuildProcessGroups();
+                RefreshGroupSummaryHeader();
+                RenderGroupCards();
                 dgvBatchFiles?.Refresh();
             }
             catch (Exception ex)
@@ -4084,6 +4157,7 @@ namespace WindowsFormsApp3
                     }
 
                     int newIndex = _batchItems.Count + 1;
+                    string itemDimensions = ResolveFileDimensions(filePath, fileName, out double rw, out double rh);
                     var item = new BatchFileItem
                     {
                         Index = newIndex,
@@ -4091,7 +4165,9 @@ namespace WindowsFormsApp3
                         FileName = fileName,
                         Quantity = quantity,
                         SerialNumber = (startSerial + newIndex - 1).ToString(),
-                        Dimensions = AdjustedDimensions ?? "",
+                        Dimensions = itemDimensions,
+                        RawPdfWidth = rw,
+                        RawPdfHeight = rh,
                         Shape = SelectedShape.ToString()
                     };
 
@@ -4102,10 +4178,9 @@ namespace WindowsFormsApp3
                 if (addedAny)
                 {
                     UpdateBatchOrderNumbers();
-                    if (lblBatchTitle != null)
-                    {
-                        lblBatchTitle.Text = $"待处理文件 ({_batchItems.Count} 款)";
-                    }
+                    RebuildProcessGroups();
+                    RefreshGroupSummaryHeader();
+                    RenderGroupCards();
                     dgvBatchFiles?.Refresh();
                 }
             }
@@ -4157,6 +4232,9 @@ namespace WindowsFormsApp3
                 {
                     EnsureCurrentFileInBatchList();
                     UpdateBatchOrderNumbers();
+                    RebuildProcessGroups();
+                    RefreshGroupSummaryHeader();
+                    RenderGroupCards();
 
                     int targetLeft = Math.Max(0, this.Left - BATCH_PANEL_WIDTH);
                     this.SetBounds(targetLeft, this.Top, this.Width + BATCH_PANEL_WIDTH, this.Height, BoundsSpecified.All);
@@ -4298,6 +4376,7 @@ namespace WindowsFormsApp3
                 }
 
                 dgvBatchFiles?.Refresh();
+                RefreshAllCardsData();
             }
             catch (Exception ex)
             {
@@ -4364,6 +4443,7 @@ namespace WindowsFormsApp3
                     }
 
                     dgvBatchFiles?.Refresh();
+                    RefreshAllCardsData();
                     LogHelper.Info($"[MaterialSelectFormModern] 自定义单位 '{unit}' 从文件名提取完成，更新了 {successCount} 款文件的数量");
                 }
             }
@@ -4417,6 +4497,7 @@ namespace WindowsFormsApp3
                     }
 
                     dgvBatchFiles?.Refresh();
+                    RefreshAllCardsData();
                     LogHelper.Info($"[MaterialSelectFormModern] 批量增量 {delta} 完成，更新了 {updated} 款文件");
                 }
             }
@@ -4468,6 +4549,7 @@ namespace WindowsFormsApp3
                         }
 
                         dgvBatchFiles?.Refresh();
+                        RefreshAllCardsData();
                     }
                 }
             }
@@ -4476,6 +4558,50 @@ namespace WindowsFormsApp3
         private List<int> GetSelectedBatchRows()
         {
             var rows = new HashSet<int>();
+
+            // 方案五卡片模式：优先从当前卡片网格读取选中行
+            if (pnlCardsContainer != null && pnlCardsContainer.Controls.Count > 0)
+            {
+                foreach (Control c in pnlCardsContainer.Controls)
+                {
+                    if (!(c is System.Windows.Forms.Panel card)) continue;
+                    foreach (Control sub in card.Controls)
+                    {
+                        if (!(sub is DataGridView dgv) || !dgv.Visible) continue;
+                        if (!(dgv.DataSource is BindingList<BatchFileItem> itemsInDgv)) continue;
+
+                        var rowIndices = new HashSet<int>();
+                        foreach (DataGridViewCell cell in dgv.SelectedCells)
+                        {
+                            if (cell.RowIndex >= 0 && cell.RowIndex < itemsInDgv.Count)
+                            {
+                                rowIndices.Add(cell.RowIndex);
+                            }
+                        }
+                        foreach (DataGridViewRow row in dgv.SelectedRows)
+                        {
+                            if (row.Index >= 0 && row.Index < itemsInDgv.Count)
+                            {
+                                rowIndices.Add(row.Index);
+                            }
+                        }
+                        foreach (int r in rowIndices)
+                        {
+                            int globalIndex = _batchItems.ToList().FindIndex(b => b.FilePath == itemsInDgv[r].FilePath);
+                            if (globalIndex >= 0)
+                            {
+                                rows.Add(globalIndex);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (rows.Count > 0)
+            {
+                return rows.OrderBy(r => r).ToList();
+            }
+
             if (dgvBatchFiles != null)
             {
                 foreach (DataGridViewCell cell in dgvBatchFiles.SelectedCells)
@@ -5397,6 +5523,11 @@ namespace WindowsFormsApp3
             }
 
             AdjustedDimensions = finalDimensions;
+
+            if (_batchItems != null && _batchItems.Count > 0)
+            {
+                UpdateAllFileDimensionsWithBleed();
+            }
         }
 
         /// <summary>
@@ -6952,6 +7083,8 @@ namespace WindowsFormsApp3
                 // 更新菜单
                 UpdatePresetMenu();
 
+                SyncCurrentSelectionsToActiveGroup();
+                UpdateAllFileDimensionsWithBleed();
                 LogHelper.Info($"[预设] 已加载预设: {presetName}");
             }
             catch (Exception ex)
@@ -8076,6 +8209,7 @@ namespace WindowsFormsApp3
                     ClearLayoutDisplay();
                 }
 
+                SyncCurrentSelectionsToActiveGroup();
                 LogHelper.Debug("[MaterialSelectFormModern] 排版设置已更新");
             }
             catch (Exception ex)
@@ -8429,10 +8563,12 @@ namespace WindowsFormsApp3
                 {
                     FixedWidth = rollWidth,
                     MinLength = minLength,
-                    MarginTop = GetFloatValue(marginTopStr, 0),
-                    MarginBottom = GetFloatValue(marginBottomStr, 0),
-                    MarginLeft = GetFloatValue(marginLeftStr, 0),
-                    MarginRight = GetFloatValue(marginRightStr, 0)
+                    MarginTop = GetFloatValue(marginTopStr, 10f),
+                    MarginBottom = GetFloatValue(marginBottomStr, 10f),
+                    MarginLeft = GetFloatValue(marginLeftStr, 10f),
+                    MarginRight = GetFloatValue(marginRightStr, 10f),
+                    Rows = GetIntValue(AppSettings.Get("Imposition_Rows") as string, 0),
+                    Columns = GetIntValue(AppSettings.Get("Imposition_Columns") as string, 0)
                 };
             }
             catch (Exception ex)

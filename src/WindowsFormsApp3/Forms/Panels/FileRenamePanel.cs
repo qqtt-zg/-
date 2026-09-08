@@ -4165,6 +4165,7 @@ namespace WindowsFormsApp3.Forms.Panels
                             SelectedOrderRegexName = dialog.SelectedOrderRegexName ?? "",
                             SelectedOrderRegexPattern = dialog.SelectedOrderRegexPattern ?? "",
                             BatchItems = dialog.BatchFileItems ?? new List<BatchFileItem>(),
+                            ProcessGroups = dialog.ProcessGroups ?? new List<BatchProcessGroup>(),
                             SelectedMaterial = dialog.SelectedMaterial,
                             SelectedQuantity = dialog.Quantity,
                             SelectedSerialNumber = dialog.SerialNumber,
