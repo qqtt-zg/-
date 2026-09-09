@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "createdAt": "2026-09-07T11:56:46.345Z",
+  "updatedAt": "2026-09-07T16:25:47.012Z",
+  "briefPath": ".omx/ultragoal/brief.md",
+  "goalsPath": ".omx/ultragoal/goals.json",
+  "ledgerPath": ".omx/ultragoal/ledger.jsonl",
+  "codexGoalMode": "aggregate",
+  "goals": [
+    {
+      "id": "G001-antdui-interaction-migration",
+      "title": "# AntdUI interaction migration",
+      "objective": "# AntdUI interaction migration\n\n## Stories\n\n### 1. Validate hard UI parity gates\nProve AntdUI 2.4.8 can preserve required Modal DialogResult/default-button semantics and define a parity-safe approach for FileRename persistent column checklist; block affected migration if either proof fails.\n\n### 2. Add thin interaction contracts and renderers\nAdd request models and thin AntdUI menu/modal renderers. Callers must retain business commands, target selection, dynamic state, keyboard handling, and explicit owner/UI-thread behavior.\n\n### 3. Add a global AntdUI theme bridge\nSynchronize existing ThemeDefinition colors at the non-recursive theme entry point. Validate deep, light, eye-care green, and classic blue without per-popup global mutations.\n\n### 4. Migrate simple popup menu hosts\nMigrate the in-app main more menu, PDF tab menu, and PDF viewer menu while retaining native tray menu and existing commands.\n\n### 5. Migrate grid and file-renaming menus\nMigrate DataGridView, DgvContextMenu, FileRename, and database menus while preserving targets, shortcuts, checked state, nested structure, and the approved persistent column checklist behavior.\n\n### 6. Migrate dynamic and nonstandard menus\nMigrate MaterialSelect, batch workbench, event-group tree, and floating drop-zone menus while preserving dynamic state, keyboard invocation, top-most handling, and persistence.\n\n### 7. Migrate short decision dialogs\nMigrate short business confirmation dialogs through owner-bound Modal requests with exact existing result semantics. Leave input dialogs, file pickers, progress/complex forms, one-button alerts, and update workflow unchanged.\n\n### 8. Verify and review the complete migration\nRun targeted tests, four-theme and DPI interaction matrix, full build/tests, cleanup, independent code review, and architecture invariant audit. Preserve all unrelated working-tree changes.",
+      "status": "complete",
+      "attempt": 1,
+      "createdAt": "2026-09-07T11:56:46.345Z",
+      "updatedAt": "2026-09-07T16:25:47.012Z",
+      "startedAt": "2026-09-07T11:56:52.985Z",
+      "evidence": "All eight stories implemented: AntdUI request/render adapters, theme bridge, all in-scope business menus/dialogs, keyboard invocation, owner-safe modal results, persistent column checklist, DPI/edge corrections. Full build/tests and static native-menu audit verified; formal code review APPROVE and architecture review CLEAR.",
+      "completedAt": "2026-09-07T16:25:47.012Z"
+    }
+  ],
+  "codexObjective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+  "aggregateCompletion": {
+    "status": "complete",
+    "completedAt": "2026-09-07T16:25:47.012Z",
+    "evidence": "All eight stories implemented: AntdUI request/render adapters, theme bridge, all in-scope business menus/dialogs, keyboard invocation, owner-safe modal results, persistent column checklist, DPI/edge corrections. Full build/tests and static native-menu audit verified; formal code review APPROVE and architecture review CLEAR.",
+    "codexGoal": {
+      "available": true,
+      "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+      "status": "complete",
+      "remainingTokens": null,
+      "raw": {
+        "threadId": "01a07c75-c147-77d0-b82d-aa5fe06e3b32",
+        "objective": "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
+        "status": "complete",
+        "tokensUsed": 1148815,
+        "timeUsedSeconds": 3069,
+        "createdAt": 1788794565,
+        "updatedAt": 1788798324
+      }
+    }
+  }
+}

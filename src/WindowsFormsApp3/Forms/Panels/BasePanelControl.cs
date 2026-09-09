@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Panels
 {
@@ -178,7 +179,7 @@ namespace WindowsFormsApp3.Forms.Panels
         /// </summary>
         protected bool ShowConfirm(string message, string title = "确认")
         {
-            return MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            return UIHelper.ShowYesNoConfirmation(FindForm(), message, title) == DialogResult.Yes;
         }
     }
 }

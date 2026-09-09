@@ -17,6 +17,7 @@ using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Forms.Main;
 using WindowsFormsApp3.Forms.Controls;
+using WindowsFormsApp3.UI;
 using Newtonsoft.Json;
 
 namespace WindowsFormsApp3
@@ -219,7 +220,7 @@ namespace WindowsFormsApp3
         private CopyType _copyType = CopyType.Layout;
 
         // 预设右键菜单
-        private System.Windows.Forms.ContextMenuStrip _presetContextMenu;
+        private bool _isPresetContextMenuInitialized;
         private string _currentPresetName = "";
 
         // 订单号模式与二级正则配置
@@ -229,10 +230,7 @@ namespace WindowsFormsApp3
         private string _selectedOrderRegexPattern = "";
 
 
-        private System.Windows.Forms.ContextMenuStrip _orderNumberModeMenu;
-        private System.Windows.Forms.ToolStripMenuItem _miModeNone;
-        private System.Windows.Forms.ToolStripMenuItem _miModeAutoInc;
-        private System.Windows.Forms.ToolStripMenuItem _miModeRegex;
+        private IReadOnlyList<ContextMenuItemSpec> _orderNumberModeMenuItems = Array.Empty<ContextMenuItemSpec>();
 
         private static void SetControlBoundsSafe(Control ctrl, int x, int y, int width, int height)
         {
@@ -249,7 +247,6 @@ namespace WindowsFormsApp3
         private System.Windows.Forms.Panel pnlBottomToolbar;
         private System.Windows.Forms.Panel pnlCardsContainer;
         private System.Windows.Forms.DataGridView dgvBatchFiles;
-        private System.Windows.Forms.ContextMenuStrip _batchContextMenu;
         private Rectangle _dragBoxFromMouseDown;
         private int _rowIndexFromMouseDown = -1;
         private AntdUI.Button btnMoveUp;
@@ -266,7 +263,7 @@ namespace WindowsFormsApp3
         public OrderNumberMode CurrentOrderNumberMode => _currentOrderNumberMode;
         public string SelectedOrderRegexName => _selectedOrderRegexName;
         public string SelectedOrderRegexPattern => _selectedOrderRegexPattern;
-        public System.Windows.Forms.ContextMenuStrip OrderNumberModeMenu => _orderNumberModeMenu;
+        public IReadOnlyList<ContextMenuItemSpec> OrderNumberModeMenuItems => _orderNumberModeMenuItems;
         public AntdUI.Button BtnOrderNumberMode => btnOrderNumberMode;
 
         // 本次材料选择使用的临时排版参数，不回写全局自动排版设置。
@@ -2893,8 +2890,21 @@ namespace WindowsFormsApp3
             // 验证路径是否存在
             if (!Directory.Exists(SelectedExportPath))
             {
-                var result = MessageBox.Show($"选择的路径不存在:\n{SelectedExportPath}\n\n是否创建该文件夹？",
-                    "路径验证", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                var result = AntdUiModalRenderer.Show(new ModalRequest(
+                    this,
+                    "路径验证",
+                    $"选择的路径不存在:\n{SelectedExportPath}\n\n是否创建该文件夹？",
+                    new[]
+                    {
+                        new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                        {
+                            IsDefault = true
+                        },
+                        new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                    })
+                {
+                    Icon = AntdUI.TType.Warn
+                });
 
                 if (result == DialogResult.Yes)
                 {
@@ -3309,48 +3319,29 @@ namespace WindowsFormsApp3
             try
             {
                 LoadOrderRegexDictionary();
-
-                if (_orderNumberModeMenu == null)
+                var regexItems = _orderRegexDict.Select(kvp => new ContextMenuItemSpec("order-regex-" + kvp.Key, kvp.Key)
                 {
-                    _orderNumberModeMenu = components != null
-                        ? new System.Windows.Forms.ContextMenuStrip(components)
-                        : new System.Windows.Forms.ContextMenuStrip();
-                }
+                    Tag = kvp,
+                    Checked = _currentOrderNumberMode == OrderNumberMode.RegexExtraction &&
+                        string.Equals(_selectedOrderRegexName, kvp.Key, StringComparison.OrdinalIgnoreCase)
+                }).ToArray();
 
-                _orderNumberModeMenu.Items.Clear();
-
-                _miModeNone = new System.Windows.Forms.ToolStripMenuItem("无", null, (s, e) => SelectOrderNumberMode(OrderNumberMode.None))
+                _orderNumberModeMenuItems = new[]
                 {
-                    Checked = (_currentOrderNumberMode == OrderNumberMode.None)
-                };
-
-                _miModeAutoInc = new System.Windows.Forms.ToolStripMenuItem("自动递增", null, (s, e) => SelectOrderNumberMode(OrderNumberMode.AutoIncrement))
-                {
-                    Checked = (_currentOrderNumberMode == OrderNumberMode.AutoIncrement)
-                };
-
-                _miModeRegex = new System.Windows.Forms.ToolStripMenuItem("正则提取")
-                {
-                    Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction)
-                };
-
-                // 添加二级正则子菜单
-                foreach (var kvp in _orderRegexDict)
-                {
-                    string ruleName = kvp.Key;
-                    string pattern = kvp.Value;
-                    var subItem = new System.Windows.Forms.ToolStripMenuItem(ruleName, null, (s, e) => SelectOrderRegexRule(ruleName, pattern))
+                    new ContextMenuItemSpec("order-mode-none", "无")
                     {
-                        ToolTipText = pattern,
-                        Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction &&
-                                   string.Equals(_selectedOrderRegexName, ruleName, StringComparison.OrdinalIgnoreCase))
-                    };
-                    _miModeRegex.DropDownItems.Add(subItem);
-                }
-
-                _orderNumberModeMenu.Items.Add(_miModeNone);
-                _orderNumberModeMenu.Items.Add(_miModeAutoInc);
-                _orderNumberModeMenu.Items.Add(_miModeRegex);
+                        Checked = _currentOrderNumberMode == OrderNumberMode.None
+                    },
+                    new ContextMenuItemSpec("order-mode-auto-increment", "自动递增")
+                    {
+                        Checked = _currentOrderNumberMode == OrderNumberMode.AutoIncrement
+                    },
+                    new ContextMenuItemSpec("order-mode-regex", "正则提取")
+                    {
+                        Checked = _currentOrderNumberMode == OrderNumberMode.RegexExtraction,
+                        Items = regexItems
+                    }
+                };
             }
             catch (Exception ex)
             {
@@ -3537,30 +3528,7 @@ namespace WindowsFormsApp3
                         break;
                 }
             }
-            UpdateOrderNumberModeMenuChecks();
-        }
-
-        /// <summary>
-        /// 更新菜单与子菜单的勾选状态
-        /// </summary>
-        private void UpdateOrderNumberModeMenuChecks()
-        {
-            if (_miModeNone != null)
-                _miModeNone.Checked = (_currentOrderNumberMode == OrderNumberMode.None);
-            if (_miModeAutoInc != null)
-                _miModeAutoInc.Checked = (_currentOrderNumberMode == OrderNumberMode.AutoIncrement);
-            if (_miModeRegex != null)
-            {
-                _miModeRegex.Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction);
-                foreach (System.Windows.Forms.ToolStripItem item in _miModeRegex.DropDownItems)
-                {
-                    if (item is System.Windows.Forms.ToolStripMenuItem subMenuItem)
-                    {
-                        subMenuItem.Checked = (_currentOrderNumberMode == OrderNumberMode.RegexExtraction &&
-                                               string.Equals(subMenuItem.Text, _selectedOrderRegexName, StringComparison.OrdinalIgnoreCase));
-                    }
-                }
-            }
+            BuildOrderNumberModeMenu();
         }
 
         /// <summary>
@@ -3569,7 +3537,29 @@ namespace WindowsFormsApp3
         private void btnOrderNumberMode_Click(object sender, EventArgs e)
         {
             BuildOrderNumberModeMenu();
-            _orderNumberModeMenu?.Show(btnOrderNumberMode, new Point(0, btnOrderNumberMode.Height));
+            AntdUiContextMenuRenderer.Show(new ContextMenuRequest(btnOrderNumberMode, _orderNumberModeMenuItems)
+            {
+                Location = new Point(0, btnOrderNumberMode.Height)
+            }, ExecuteOrderNumberModeMenuItem);
+        }
+
+        private void ExecuteOrderNumberModeMenuItem(ContextMenuItemSpec item)
+        {
+            switch (item.Id)
+            {
+                case "order-mode-none":
+                    SelectOrderNumberMode(OrderNumberMode.None);
+                    break;
+                case "order-mode-auto-increment":
+                    SelectOrderNumberMode(OrderNumberMode.AutoIncrement);
+                    break;
+                default:
+                    if (item.Tag is KeyValuePair<string, string> regexRule)
+                    {
+                        SelectOrderRegexRule(regexRule.Key, regexRule.Value);
+                    }
+                    break;
+            }
         }
 
         /// <summary>
@@ -3903,35 +3893,6 @@ namespace WindowsFormsApp3
                 dgvBatchFiles.DragOver += DgvBatchFiles_DragOver;
                 dgvBatchFiles.DragDrop += DgvBatchFiles_DragDrop;
                 dgvBatchFiles.CellMouseDown += DgvBatchFiles_CellMouseDown;
-
-                // 初始化左侧列表专属右键菜单
-                _batchContextMenu = new System.Windows.Forms.ContextMenuStrip();
-
-                var miExtractQty = new System.Windows.Forms.ToolStripMenuItem("从文件名提取数量...", null, (s, e) =>
-                {
-                    ShowBatchExtractQuantityDialog();
-                });
-                _batchContextMenu.Items.Add(miExtractQty);
-
-                var miAdjustQty = new System.Windows.Forms.ToolStripMenuItem("按当前数量批量增量...", null, (s, e) =>
-                {
-                    ShowBatchAdjustQuantityDialog();
-                });
-                _batchContextMenu.Items.Add(miAdjustQty);
-
-                var miSetQty = new System.Windows.Forms.ToolStripMenuItem("批量设置数量...", null, (s, e) =>
-                {
-                    ShowBatchSetQuantityDialog();
-                });
-                _batchContextMenu.Items.Add(miSetQty);
-
-                _batchContextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-
-                var miPasteQty = new System.Windows.Forms.ToolStripMenuItem("从剪贴板批量粘贴数量", null, (s, e) =>
-                {
-                    PasteQuantitiesFromClipboard();
-                });
-                _batchContextMenu.Items.Add(miPasteQty);
 
                 dgvBatchFiles.Visible = false;
                 pnlFileList.Controls.Add(pnlCardsContainer);
@@ -4654,10 +4615,44 @@ namespace WindowsFormsApp3
                         dgvBatchFiles.CurrentCell = clickedCell;
                     }
 
-                    var cellRect = dgvBatchFiles.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                    var showPoint = new Point(cellRect.Left + e.X, cellRect.Top + e.Y);
-                    _batchContextMenu?.Show(dgvBatchFiles, showPoint);
+                    var showPoint = ContextMenuRequest.GetMouseInvocationLocation(e.X, e.Y);
+                    ShowBatchContextMenu(dgvBatchFiles, showPoint);
                 }
+            }
+        }
+
+        private void ShowBatchContextMenu(Control target, Point location)
+        {
+            AntdUiContextMenuRenderer.Show(new ContextMenuRequest(target, new[]
+            {
+                new ContextMenuItemSpec("batch-extract-quantity", "从文件名提取数量..."),
+                new ContextMenuItemSpec("batch-adjust-quantity", "按当前数量批量增量..."),
+                new ContextMenuItemSpec("batch-set-quantity", "批量设置数量..."),
+                ContextMenuItemSpec.Divider(),
+                new ContextMenuItemSpec("batch-paste-quantity", "从剪贴板批量粘贴数量")
+            })
+            {
+                Location = location,
+                UseMousePosition = true
+            }, ExecuteBatchContextMenuItem);
+        }
+
+        private void ExecuteBatchContextMenuItem(ContextMenuItemSpec item)
+        {
+            switch (item.Id)
+            {
+                case "batch-extract-quantity":
+                    ShowBatchExtractQuantityDialog();
+                    break;
+                case "batch-adjust-quantity":
+                    ShowBatchAdjustQuantityDialog();
+                    break;
+                case "batch-set-quantity":
+                    ShowBatchSetQuantityDialog();
+                    break;
+                case "batch-paste-quantity":
+                    PasteQuantitiesFromClipboard();
+                    break;
             }
         }
 
@@ -6367,21 +6362,24 @@ namespace WindowsFormsApp3
         /// </summary>
         protected override void WndProc(ref System.Windows.Forms.Message m)
         {
-            if (m.Msg == WM_CONTEXTMENU && _presetContextMenu != null)
+            if (m.Msg == WM_CONTEXTMENU && _isPresetContextMenuInitialized)
             {
                 // 获取鼠标位置
                 int x = m.LParam.ToInt32() & 0xFFFF;
                 int y = m.LParam.ToInt32() >> 16;
 
                 // 如果是 -1,-1（由键盘触发），则显示在窗体中心
-                if (x == 0xFFFF && y == 0xFFFF)
+                var isKeyboardInvocation = x == 0xFFFF && y == 0xFFFF;
+                Point clientPoint;
+                if (isKeyboardInvocation)
                 {
-                    x = this.Width / 2;
-                    y = this.Height / 2;
+                    clientPoint = ContextMenuRequest.GetKeyboardInvocationLocation(this);
                 }
-
-                // 转换屏幕坐标到客户端坐标
-                Point clientPoint = this.PointToClient(new Point(x, y));
+                else
+                {
+                    // WM_CONTEXTMENU 的鼠标分支提供屏幕坐标。
+                    clientPoint = this.PointToClient(new Point(x, y));
+                }
 
                 // 输入框及左侧列表面板保留原生/专属右键行为，避免全局预设菜单拦截。
                 if ((_rowsInput != null && _rowsInput.Bounds.Contains(clientPoint)) ||
@@ -6393,8 +6391,11 @@ namespace WindowsFormsApp3
                 }
 
                 // 显示右键菜单
-                UpdatePresetMenu();
-                _presetContextMenu.Show(this, clientPoint);
+                AntdUiContextMenuRenderer.Show(new ContextMenuRequest(this, CreatePresetMenuItems())
+                {
+                    Location = clientPoint,
+                    UseMousePosition = !isKeyboardInvocation
+                }, ExecutePresetMenuItem);
                 return;
             }
 
@@ -6406,22 +6407,7 @@ namespace WindowsFormsApp3
         /// </summary>
         private void InitializePresetContextMenu()
         {
-            _presetContextMenu = new System.Windows.Forms.ContextMenuStrip();
-            _presetContextMenu.Items.Add("临时排版参数...", null, (s, e) => OpenTemporaryImpositionParameters());
-            _presetContextMenu.Items.Add(new ToolStripSeparator());
-            _presetContextMenu.Items.Add("保存为预设...", null, (s, e) => SaveCurrentAsPreset());
-
-            // 管理预设
-            _presetContextMenu.Items.Add("管理预设...", null, (s, e) => OpenPresetManagement());
-
-            // 添加分隔线（分隔管理与预设列表）
-            _presetContextMenu.Items.Add(new ToolStripSeparator());
-
-            // 预留位置给预设列表（动态插入）
-            _presetContextMenu.Items.Add(new System.Windows.Forms.ToolStripMenuItem(""));
-
-            // 加载预设列表
-            UpdatePresetMenu();
+            _isPresetContextMenuInitialized = true;
         }
 
         /// <summary>
@@ -6647,33 +6633,62 @@ namespace WindowsFormsApp3
         /// </summary>
         private void UpdatePresetMenu()
         {
-            if (_presetContextMenu == null) return;
+            // 预设菜单在显示时根据最新设置生成，无需维护原生菜单实例。
+        }
 
-            // 菜单结构: 临时参数 | 分隔线 | 保存预设 | 管理预设 | 分隔线 | 预设列表...
-            var presets = AppSettings.MaterialPresets;
-
-            // 移除旧的预设列表项（从索引5开始）
-            while (_presetContextMenu.Items.Count > 5)
+        private IReadOnlyList<ContextMenuItemSpec> CreatePresetMenuItems()
+        {
+            var items = new List<ContextMenuItemSpec>
             {
-                _presetContextMenu.Items.RemoveAt(5);
-            }
+                new ContextMenuItemSpec("preset-temporary-imposition", "临时排版参数..."),
+                ContextMenuItemSpec.Divider(),
+                new ContextMenuItemSpec("preset-save", "保存为预设..."),
+                new ContextMenuItemSpec("preset-manage", "管理预设..."),
+                ContextMenuItemSpec.Divider()
+            };
 
+            var presets = AppSettings.MaterialPresets;
             if (presets != null && presets.Count > 0)
             {
-                foreach (var preset in presets)
+                for (var index = 0; index < presets.Count; index++)
                 {
-                    // 创建预设主菜单项 - 直接点击加载
-                    var menuItem = new System.Windows.Forms.ToolStripMenuItem(preset.Name, null, (s, e) => LoadPreset(preset.Name));
-
-                    // 使用 Add 而非 Insert，保持与 PresetManagementForm 中一致的顺序
-                    _presetContextMenu.Items.Add(menuItem);
+                    var preset = presets[index];
+                    items.Add(new ContextMenuItemSpec("preset-load-" + index, preset.Name)
+                    {
+                        Tag = preset.Name
+                    });
                 }
             }
             else
             {
-                var noPresetItem = new System.Windows.Forms.ToolStripMenuItem("(无预设)");
-                noPresetItem.Enabled = false;
-                _presetContextMenu.Items.Add(noPresetItem);
+                items.Add(new ContextMenuItemSpec("preset-empty", "(无预设)")
+                {
+                    Enabled = false
+                });
+            }
+
+            return items;
+        }
+
+        private void ExecutePresetMenuItem(ContextMenuItemSpec item)
+        {
+            switch (item.Id)
+            {
+                case "preset-temporary-imposition":
+                    OpenTemporaryImpositionParameters();
+                    break;
+                case "preset-save":
+                    SaveCurrentAsPreset();
+                    break;
+                case "preset-manage":
+                    OpenPresetManagement();
+                    break;
+                default:
+                    if (item.Id.StartsWith("preset-load-", StringComparison.Ordinal))
+                    {
+                        LoadPreset((string)item.Tag);
+                    }
+                    break;
             }
         }
 
@@ -6740,8 +6755,21 @@ namespace WindowsFormsApp3
                     if (existingIndex >= 0)
                     {
                         // 询问是否覆盖
-                        var result = MessageBox.Show($"预设\"{presetName}\"已存在，是否覆盖？", "确认覆盖",
-                            MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                        var result = AntdUiModalRenderer.Show(new ModalRequest(
+                            this,
+                            "确认覆盖",
+                            $"预设\"{presetName}\"已存在，是否覆盖？",
+                            new[]
+                            {
+                                new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                                {
+                                    IsDefault = true
+                                },
+                                new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                            })
+                        {
+                            Icon = AntdUI.TType.Warn
+                        });
                         if (result != DialogResult.Yes)
                             return;
                         presets[existingIndex] = preset;
@@ -7105,8 +7133,21 @@ namespace WindowsFormsApp3
                 return;
             }
 
-            var result = MessageBox.Show($"确定要删除预设\"{_currentPresetName}\"吗？", "确认删除",
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            var result = AntdUiModalRenderer.Show(new ModalRequest(
+                this,
+                "确认删除",
+                $"确定要删除预设\"{_currentPresetName}\"吗？",
+                new[]
+                {
+                    new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                    {
+                        IsDefault = true
+                    },
+                    new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                })
+            {
+                Icon = AntdUI.TType.Warn
+            });
 
             if (result == DialogResult.Yes)
             {

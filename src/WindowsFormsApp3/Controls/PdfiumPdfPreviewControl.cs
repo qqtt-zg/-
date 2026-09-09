@@ -4,6 +4,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using PdfiumViewer;
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Controls
@@ -180,39 +181,7 @@ namespace WindowsFormsApp3.Controls
                 }
             };
             
-            // 创建右键菜单
-            var contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("最佳适应", null, (s, e) => 
-            {
-                // 先重置Zoom值和ZoomMode，触发重新计算
-                _pdfViewer.Renderer.Zoom = 1.0;
-                _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest;
-                _pdfViewer.Renderer.Padding = new Padding(0);
-                ApplyBestFitZoomPublic();
-            });
-            contextMenu.Items.Add("适应宽度", null, (s, e) => 
-            {
-                // 先重置Zoom值，强制触发ZoomMode变更
-                _pdfViewer.Renderer.Zoom = 1.0;
-                _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest; // 先设置为其他模式
-                // 宽度适应需要底部Padding让最后一页可以滚动到顶部
-                int bottomPadding = (int)_pdfViewer.Renderer.Height - 50;
-                if (bottomPadding < 100) bottomPadding = 100;
-                _pdfViewer.Renderer.Padding = new Padding(0, 0, 0, bottomPadding);
-                _pdfViewer.ZoomMode = PdfViewerZoomMode.FitWidth;
-                _pdfViewer.Refresh();
-            });
-            contextMenu.Items.Add("适应高度", null, (s, e) => 
-            {
-                // 先重置Zoom值，强制触发ZoomMode变更
-                _pdfViewer.Renderer.Zoom = 1.0;
-                _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest; // 先设置为其他模式
-                // 高度适应不需要额外Padding
-                _pdfViewer.Renderer.Padding = new Padding(0);
-                _pdfViewer.ZoomMode = PdfViewerZoomMode.FitHeight;
-                _pdfViewer.Refresh();
-            });
-            _pdfViewer.Renderer.ContextMenuStrip = contextMenu;
+            _pdfViewer.Renderer.MouseDown += Renderer_MouseDown;
 
             this.Controls.Add(_pdfViewer);
             // 🔧 移除硬编码的背景色，使用控件默认颜色，支持后续主题设置
@@ -224,6 +193,80 @@ namespace WindowsFormsApp3.Controls
         }
 
         #endregion
+
+        private void Renderer_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+            {
+                return;
+            }
+
+            var request = new ContextMenuRequest(
+                _pdfViewer.Renderer,
+                new[]
+                {
+                    new ContextMenuItemSpec("fit-best", "最佳适应"),
+                    new ContextMenuItemSpec("fit-width", "适应宽度"),
+                    new ContextMenuItemSpec("fit-height", "适应高度")
+                })
+            {
+                Location = e.Location,
+                UseMousePosition = true
+            };
+
+            AntdUiContextMenuRenderer.Show(request, item =>
+            {
+                switch (item.Id)
+                {
+                    case "fit-best":
+                        ApplyBestFitFromContextMenu();
+                        break;
+                    case "fit-width":
+                        ApplyFitWidthFromContextMenu();
+                        break;
+                    case "fit-height":
+                        ApplyFitHeightFromContextMenu();
+                        break;
+                }
+            });
+        }
+
+        private void ApplyBestFitFromContextMenu()
+        {
+            // 先重置 Zoom 值和 ZoomMode，触发重新计算。
+            _pdfViewer.Renderer.Zoom = 1.0;
+            _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest;
+            _pdfViewer.Renderer.Padding = new Padding(0);
+            ApplyBestFitZoomPublic();
+        }
+
+        private void ApplyFitWidthFromContextMenu()
+        {
+            // 先重置 Zoom 值，强制触发 ZoomMode 变更。
+            _pdfViewer.Renderer.Zoom = 1.0;
+            _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest;
+            // 宽度适应需要底部 Padding 让最后一页可以滚动到顶部。
+            int bottomPadding = _pdfViewer.Renderer.Height - 50;
+            if (bottomPadding < 100)
+            {
+                bottomPadding = 100;
+            }
+
+            _pdfViewer.Renderer.Padding = new Padding(0, 0, 0, bottomPadding);
+            _pdfViewer.ZoomMode = PdfViewerZoomMode.FitWidth;
+            _pdfViewer.Refresh();
+        }
+
+        private void ApplyFitHeightFromContextMenu()
+        {
+            // 先重置 Zoom 值，强制触发 ZoomMode 变更。
+            _pdfViewer.Renderer.Zoom = 1.0;
+            _pdfViewer.ZoomMode = PdfViewerZoomMode.FitBest;
+            // 高度适应不需要额外 Padding。
+            _pdfViewer.Renderer.Padding = new Padding(0);
+            _pdfViewer.ZoomMode = PdfViewerZoomMode.FitHeight;
+            _pdfViewer.Refresh();
+        }
 
         #region 公共方法
 

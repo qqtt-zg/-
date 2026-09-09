@@ -5,6 +5,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 using Ookii.Dialogs.WinForms;
 
@@ -176,7 +177,24 @@ namespace WindowsFormsApp3.Forms.Controls.Settings
         {
              if (dgvExportPaths.SelectedRows.Count == 0) return;
 
-             if (MessageBox.Show("确定要删除选中路径吗？", "确认", MessageBoxButtons.YesNo) == DialogResult.Yes)
+             var modalOwner = FindForm();
+             if (modalOwner == null)
+             {
+                 throw new InvalidOperationException("导出路径设置控件尚未附加到窗体，无法显示确认弹框。");
+             }
+
+             if (AntdUiModalRenderer.Show(new ModalRequest(
+                 modalOwner,
+                 "确认",
+                 "确定要删除选中路径吗？",
+                 new[]
+                 {
+                     new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                     {
+                         IsDefault = true
+                     },
+                     new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                 })) == DialogResult.Yes)
              {
                  foreach (DataGridViewRow row in dgvExportPaths.SelectedRows)
                  {

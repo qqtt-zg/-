@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows.Forms;
 using WindowsFormsApp3.Forms.Utils;
 using WindowsFormsApp3.Utils;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Panels
 {
@@ -77,13 +78,21 @@ namespace WindowsFormsApp3.Forms.Panels
                 if (File.Exists(destFile))
                 {
                     var fileName = Path.GetFileName(destFile);
-                    var result = MessageBox.Show(
-                        $"文件 \"{fileName}\" 已存在，是否覆盖？",
+                    var result = ShowDropZoneConfirmation(
                         "文件覆盖确认",
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question);
+                        $"文件 \"{fileName}\" 已存在，是否覆盖？",
+                        new[]
+                        {
+                            new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default),
+                            new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                            {
+                                IsDefault = true
+                            }
+                        },
+                        AntdUI.TType.Info,
+                        keyboard: true);
                     
-                    if (result == DialogResult.No)
+                    if (result != DialogResult.Yes)
                     {
                         // 用户选择不覆盖，取消操作
                         UpdateStatus("操作已取消：文件已存在");
@@ -129,16 +138,25 @@ namespace WindowsFormsApp3.Forms.Panels
                             catch (Exception ex)
                             {
                                 var fileName = Path.GetFileName(sourceFile);
-                                var result = MessageBox.Show(
+                                var result = ShowDropZoneConfirmation(
+                                    "移动失败",
                                     $"文件 \"{fileName}\" 正在被占用或无法移动。\n\n" +
                                     $"错误信息：{ex.Message}\n\n" +
                                     "你想怎么处理？\n" +
                                     "- 选【重试】：关闭占用后再次尝试移动\n" +
                                     "- 选【忽略】：改为复制到监控目录（保留源文件）\n" +
                                     "- 选【中止】：取消本次导入",
-                                    "移动失败",
-                                    MessageBoxButtons.AbortRetryIgnore,
-                                    MessageBoxIcon.Warning);
+                                    new[]
+                                    {
+                                        new ModalButtonSpec("abort", "中止", DialogResult.Abort, AntdUI.TTypeMini.Error)
+                                        {
+                                            IsDefault = true
+                                        },
+                                        new ModalButtonSpec("retry", "重试", DialogResult.Retry, AntdUI.TTypeMini.Primary),
+                                        new ModalButtonSpec("ignore", "忽略", DialogResult.Ignore, AntdUI.TTypeMini.Default)
+                                    },
+                                    AntdUI.TType.Warn,
+                                    keyboard: false);
 
                                 if (result == DialogResult.Retry)
                                 {
@@ -183,6 +201,27 @@ namespace WindowsFormsApp3.Forms.Panels
                 ShowError($"导入PDF失败: {ex.Message}");
                 LogHelper.Error($"导入PDF失败: {ex.Message}, 堆栈: {ex.StackTrace}");
             }
+        }
+
+        private DialogResult ShowDropZoneConfirmation(
+            string title,
+            string message,
+            ModalButtonSpec[] buttons,
+            AntdUI.TType icon,
+            bool keyboard)
+        {
+            var owner = FindForm() ?? _floatingDropZone;
+            if (owner == null || owner.IsDisposed)
+            {
+                throw new InvalidOperationException("悬浮拖拽区尚未附加到窗体，无法显示确认弹框。");
+            }
+
+            return AntdUiModalRenderer.Show(new ModalRequest(owner, title, message, buttons)
+            {
+                Icon = icon,
+                Keyboard = keyboard,
+                MaskClosable = false
+            });
         }
 
         private void DisposeFloatingDropZone()

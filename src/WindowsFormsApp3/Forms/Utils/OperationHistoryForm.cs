@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Interfaces;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3
 {
@@ -320,8 +321,21 @@ namespace WindowsFormsApp3
         /// </summary>
         private void OnClearHistory(object sender, EventArgs e)
         {
-            var result = MessageBox.Show("确定要清空所有历史记录吗？此操作不可撤销。", 
-                "确认清空", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            var result = AntdUiModalRenderer.Show(new ModalRequest(
+                this,
+                "确认清空",
+                "确定要清空所有历史记录吗？此操作不可撤销。",
+                new[]
+                {
+                    new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                    {
+                        IsDefault = true
+                    },
+                    new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                })
+            {
+                Icon = AntdUI.TType.Warn
+            });
                 
             if (result == DialogResult.Yes)
             {

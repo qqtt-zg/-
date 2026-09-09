@@ -30,6 +30,8 @@ using System.Text.RegularExpressions;
 
 using WindowsFormsApp3.Forms.Utils;
 
+using WindowsFormsApp3.UI;
+
 
 
 namespace WindowsFormsApp3.Forms.Panels
@@ -76,7 +78,7 @@ namespace WindowsFormsApp3.Forms.Panels
 
 
 
-        private ContextMenuStrip _contextMenu;
+        private List<ContextMenuItemSpec> _contextMenuItems;
 
         private int _currentColumnIndex = -1;
 
@@ -1116,7 +1118,7 @@ namespace WindowsFormsApp3.Forms.Panels
 
         // 列头右键菜单
 
-        private System.Windows.Forms.ContextMenuStrip _columnHeaderMenu;
+        private ColumnVisibilityChecklistPopup _columnHeaderPopup;
 
         
 
@@ -1130,85 +1132,10 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            _columnHeaderMenu = new System.Windows.Forms.ContextMenuStrip();
-
-            _columnHeaderMenu.Font = new Font("微软雅黑", 9F);
-
-            
-
-            // 1. "隐藏列" 子菜单
-
-            var hideColumnsItem = new ToolStripMenuItem("隐藏列");
-
-            
-
-            // 防止点击子菜单项时关闭菜单
-
-            hideColumnsItem.DropDown.Closing += (s, e) =>
-
-            {
-
-                if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked)
-
-                {
-
-                    e.Cancel = true;
-
-                }
-
-            };
-
-            
-
-            // 为每一列添加显示/隐藏选项到子菜单
-
-            foreach (System.Windows.Forms.DataGridViewColumn column in _fileTable.Columns)
-
-            {
-
-                var item = new ToolStripMenuItem(column.HeaderText)
-
-                {
-
-                    Checked = column.Visible,
-
-                    CheckOnClick = true,
-
-                    Tag = column.Name
-
-                };
-
-                item.CheckedChanged += ColumnMenuItem_CheckedChanged;
-
-                hideColumnsItem.DropDownItems.Add(item);
-
-            }
-
-            _columnHeaderMenu.Items.Add(hideColumnsItem);
-
-
-
-            _columnHeaderMenu.Items.Add(new ToolStripSeparator());
-
-
-
-            // 2. 保存设置
-
-            var saveItem = new ToolStripMenuItem("保存配置");
-
-            saveItem.Click += (s, e) => SaveColumnSettings();
-
-            _columnHeaderMenu.Items.Add(saveItem);
-
-
-
-            // 3. 恢复原始
-
-            var restoreItem = new ToolStripMenuItem("恢复原始");
-
-            restoreItem.Click += (s, e) => RestoreColumnDefaults();
-
-            _columnHeaderMenu.Items.Add(restoreItem);
+            _columnHeaderPopup = new ColumnVisibilityChecklistPopup(
+                _fileTable,
+                SaveColumnSettings,
+                RestoreColumnDefaults);
 
             
 
@@ -1244,81 +1171,16 @@ namespace WindowsFormsApp3.Forms.Panels
 
                 
 
-                // 更新菜单项的选中状态 (在"隐藏列"子菜单中)
-
-                if (_columnHeaderMenu.Items.Count > 0 && _columnHeaderMenu.Items[0] is ToolStripMenuItem hideMenu)
-
-                {
-
-                    foreach (var item in hideMenu.DropDownItems.OfType<ToolStripMenuItem>())
-
-                    {
-
-                        if (item.Tag is string columnName)
-
-                        {
-
-                            var column = _fileTable.Columns[columnName];
-
-                            if (column != null)
-
-                            {
-
-                                item.Checked = column.Visible;
-
-                            }
-
-                        }
-
-                    }
-
-                }
-
-                // 显示列头右键菜单（居中于点击的列）
-
-                var rect = _fileTable.GetCellDisplayRectangle(e.ColumnIndex, -1, true);
-
-                var menuX = rect.Left + (rect.Width - _columnHeaderMenu.Width) / 2;
-
-                _columnHeaderMenu.Show(_fileTable, menuX, rect.Bottom);
+                // 每次打开都按当前列状态创建清单，并贴近实际右键位置。
+                _columnHeaderPopup?.Show(
+                    e.ColumnIndex,
+                    ContextMenuRequest.GetMouseInvocationLocation(e.X, e.Y));
 
             }
 
         }
 
         
-
-        /// <summary>
-
-        /// 列菜单项选中状态变化事件
-
-        /// </summary>
-
-        private void ColumnMenuItem_CheckedChanged(object sender, EventArgs e)
-
-        {
-
-            if (sender is ToolStripMenuItem menuItem && menuItem.Tag is string columnName)
-
-            {
-
-                var column = _fileTable.Columns[columnName];
-
-                if (column != null)
-
-                {
-
-                    // 更新列的可见性
-
-                    column.Visible = menuItem.Checked;
-
-                }
-
-            }
-
-        }
-
-
 
         private void FileTable_CellClick(object sender, System.Windows.Forms.DataGridViewCellEventArgs e)
 
@@ -1358,9 +1220,7 @@ namespace WindowsFormsApp3.Forms.Panels
 
                 UpdateContextMenuForColumn();
 
-                var rect = _fileTable.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-
-                _contextMenu.Show(_fileTable, rect.Left, rect.Bottom);
+                ShowCellContextMenu(ContextMenuRequest.GetMouseInvocationLocation(e.X, e.Y));
 
             }
 
@@ -1376,10 +1236,58 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            _contextMenu = new ContextMenuStrip();
-
             CreateDefaultContextMenu();
 
+        }
+
+        private void ShowCellContextMenu(Point location)
+        {
+            if (_contextMenuItems == null || _contextMenuItems.Count == 0)
+            {
+                return;
+            }
+
+            var request = new ContextMenuRequest(_fileTable, _contextMenuItems)
+            {
+                Location = location,
+                UseMousePosition = true
+            };
+
+            AntdUiContextMenuRenderer.Show(request, ExecuteContextMenuCommand);
+        }
+
+        private void ExecuteContextMenuCommand(ContextMenuItemSpec item)
+        {
+            switch (item.Id)
+            {
+                case "copy":
+                    CopySelectedCell();
+                    break;
+                case "delete-row":
+                    DeleteSelectedRow();
+                    break;
+                case "refresh":
+                    RefreshData();
+                    break;
+                case "extract-quantity":
+                    ShowExtractQuantityInputDialog();
+                    break;
+                case "generate-order-number":
+                    ShowOrderNumberInputDialog();
+                    break;
+                case "adjust-quantity":
+                    ShowQuantityInputDialog(isIncremental: true);
+                    break;
+                case "set-quantity":
+                    ShowQuantityInputDialog(isIncremental: false);
+                    break;
+                case "set-bleed":
+                    ShowBleedInputDialog();
+                    break;
+                case "set-material":
+                    BatchSetCellValue("Material", item.Tag as string);
+                    break;
+            }
         }
 
 
@@ -1388,7 +1296,7 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            _contextMenu.Items.Clear();
+            _contextMenuItems = new List<ContextMenuItemSpec>();
 
             
 
@@ -1464,37 +1372,15 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            // ❌ 移除 Clear，防止覆盖前面添加的自定义菜单项
+            if (_contextMenuItems == null)
+            {
+                _contextMenuItems = new List<ContextMenuItemSpec>();
+            }
 
-            // _contextMenu.Items.Clear();
-
-            
-
-            var copyItem = new ToolStripMenuItem("复制");
-
-            copyItem.Click += (s, e) => CopySelectedCell();
-
-            _contextMenu.Items.Add(copyItem);
-
-
-
-            var deleteItem = new ToolStripMenuItem("删除行");
-
-            deleteItem.Click += (s, e) => DeleteSelectedRow();
-
-            _contextMenu.Items.Add(deleteItem);
-
-
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
-
-
-
-            var refreshItem = new ToolStripMenuItem("刷新");
-
-            refreshItem.Click += (s, e) => RefreshData();
-
-            _contextMenu.Items.Add(refreshItem);
+            _contextMenuItems.Add(new ContextMenuItemSpec("copy", "复制"));
+            _contextMenuItems.Add(new ContextMenuItemSpec("delete-row", "删除行") { IsDangerous = true });
+            _contextMenuItems.Add(ContextMenuItemSpec.Divider());
+            _contextMenuItems.Add(new ContextMenuItemSpec("refresh", "刷新"));
 
         }
 
@@ -1504,21 +1390,11 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            // ❌ 移除 redundant Clear
-
-            // _contextMenu.Items.Clear();
-
-
-
-            var extractItem = new ToolStripMenuItem("提取数量（从文件名）");
-
-            extractItem.Click += (s, e) => ShowExtractQuantityInputDialog();
-
-            _contextMenu.Items.Add(extractItem);
-
-
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
+            _contextMenuItems = new List<ContextMenuItemSpec>
+            {
+                new ContextMenuItemSpec("extract-quantity", "提取数量（从文件名）"),
+                ContextMenuItemSpec.Divider()
+            };
 
             CreateDefaultContextMenu();
 
@@ -1686,21 +1562,11 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            // ❌ 移除 redundant Clear
-
-            // _contextMenu.Items.Clear();
-
-
-
-            var generateItem = new ToolStripMenuItem("批量生产订单号");
-
-            generateItem.Click += (s, e) => ShowOrderNumberInputDialog();
-
-            _contextMenu.Items.Add(generateItem);
-
-
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
+            _contextMenuItems = new List<ContextMenuItemSpec>
+            {
+                new ContextMenuItemSpec("generate-order-number", "批量生产订单号"),
+                ContextMenuItemSpec.Divider()
+            };
 
             CreateDefaultContextMenu();
 
@@ -1922,22 +1788,13 @@ namespace WindowsFormsApp3.Forms.Panels
 
         private void CreateQuantityContextMenu()
         {
-            // 从文件名提取数量（自定义单位如：张、个、pcs）
-            var extractItem = new ToolStripMenuItem("从文件名提取数量...");
-            extractItem.Click += (s, e) => ShowExtractQuantityInputDialog();
-            _contextMenu.Items.Add(extractItem);
-
-            // 按当前数量批量增量
-            var adjustItem = new ToolStripMenuItem("按当前数量批量增量...");
-            adjustItem.Click += (s, e) => ShowQuantityInputDialog(isIncremental: true);
-            _contextMenu.Items.Add(adjustItem);
-
-            // 批量设置数量（覆盖）
-            var setItem = new ToolStripMenuItem("批量设置数量...");
-            setItem.Click += (s, e) => ShowQuantityInputDialog(isIncremental: false);
-            _contextMenu.Items.Add(setItem);
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
+            _contextMenuItems = new List<ContextMenuItemSpec>
+            {
+                new ContextMenuItemSpec("extract-quantity", "从文件名提取数量..."),
+                new ContextMenuItemSpec("adjust-quantity", "按当前数量批量增量..."),
+                new ContextMenuItemSpec("set-quantity", "批量设置数量..."),
+                ContextMenuItemSpec.Divider()
+            };
             CreateDefaultContextMenu();
         }
 
@@ -1947,19 +1804,11 @@ namespace WindowsFormsApp3.Forms.Panels
 
         {
 
-            _contextMenu.Items.Clear();
-
-            
-
-            var bleedItem = new ToolStripMenuItem("设置出血值");
-
-            bleedItem.Click += (s, e) => ShowBleedInputDialog();
-
-            _contextMenu.Items.Add(bleedItem);
-
-            
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
+            _contextMenuItems = new List<ContextMenuItemSpec>
+            {
+                new ContextMenuItemSpec("set-bleed", "设置出血值"),
+                ContextMenuItemSpec.Divider()
+            };
 
             CreateDefaultContextMenu();
 
@@ -2294,10 +2143,7 @@ namespace WindowsFormsApp3.Forms.Panels
         private void CreateMaterialContextMenu()
 
         {
-
-            // ❌ 移除 redundant Clear
-
-            // _contextMenu.Items.Clear();
+            _contextMenuItems = new List<ContextMenuItemSpec>();
 
             
 
@@ -2331,17 +2177,11 @@ namespace WindowsFormsApp3.Forms.Panels
 
                 {
 
-                    var item = new ToolStripMenuItem(material);
-
-                    // ✅ 改为调用批量设置方法
-
-                    item.Click += (s, e) => BatchSetCellValue("Material", material);
-
-                    _contextMenu.Items.Add(item);
+                    _contextMenuItems.Add(new ContextMenuItemSpec("set-material", material) { Tag = material });
 
                 }
 
-                _contextMenu.Items.Add(new ToolStripSeparator());
+                _contextMenuItems.Add(ContextMenuItemSpec.Divider());
 
             }
 
@@ -3877,10 +3717,22 @@ namespace WindowsFormsApp3.Forms.Panels
         public new bool ShowConfirm(string message, string title = "确认")
 
         {
+            var owner = FindForm();
+            if (owner == null)
+            {
+                return base.ShowConfirm(message, title);
+            }
 
-            return System.Windows.Forms.MessageBox.Show(message, title,
+            var request = new ModalRequest(owner, title, message, new[]
+            {
+                new ModalButtonSpec("no", "否", DialogResult.Cancel, AntdUI.TTypeMini.Default) { IsCancel = true },
+                new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary) { IsDefault = true }
+            })
+            {
+                Icon = AntdUI.TType.Info
+            };
 
-                MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            return AntdUiModalRenderer.Show(request) == DialogResult.Yes;
 
         }
 
@@ -4310,8 +4162,6 @@ namespace WindowsFormsApp3.Forms.Panels
                 // (_presenter as IDisposable)?.Dispose();
 
 
-
-                _contextMenu?.Dispose();
 
                 components?.Dispose();
 

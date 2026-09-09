@@ -9,6 +9,7 @@ using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Forms.Panels;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Utils
 {
@@ -410,27 +411,10 @@ namespace WindowsFormsApp3.Forms.Utils
             _popcatIcon.MouseMove += MoveDrag;
             _popcatIcon.MouseUp += EndDrag;
 
-            // Right click menu
-            var menu = new ContextMenuStrip();
-            
-            // 添加"显示边框"复选框菜单项
-            var showBorderItem = new ToolStripMenuItem("显示边框");
-            showBorderItem.Checked = _showBorder;
-            showBorderItem.Click += (s, e) =>
-            {
-                _showBorder = !_showBorder;
-                showBorderItem.Checked = _showBorder;
-                SaveBorderSetting();
-                Invalidate(); // 刷新窗口以显示/隐藏边框
-            };
-            menu.Items.Add(showBorderItem);
-            
-            menu.Items.Add("隐藏", null, (s, e) =>
-            {
-                PersistBounds();
-                Hide();
-            });
-            ContextMenuStrip = menu;
+            // 右键菜单使用 AntdUI 渲染；不设置 ContextMenuStrip，避免原生菜单抢占焦点。
+            MouseDown += ShowContextMenuOnRightClick;
+            _label.MouseDown += ShowContextMenuOnRightClick;
+            _popcatIcon.MouseDown += ShowContextMenuOnRightClick;
 
             // Persist when move/resize ends
             Move += (s, e) =>
@@ -452,6 +436,51 @@ namespace WindowsFormsApp3.Forms.Utils
                     Update();
                 }
             };
+        }
+
+        private void ShowContextMenuOnRightClick(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || !(sender is Control target))
+            {
+                return;
+            }
+
+            var request = new ContextMenuRequest(
+                target,
+                new[]
+                {
+                    new ContextMenuItemSpec("show-border", "显示边框")
+                    {
+                        Checked = _showBorder
+                    },
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("hide", "隐藏")
+                })
+            {
+                Location = e.Location,
+                UseMousePosition = true
+            };
+
+            var config = AntdUiContextMenuRenderer.CreateConfig(request, item =>
+            {
+                switch (item.Id)
+                {
+                    case "show-border":
+                        _showBorder = !_showBorder;
+                        SaveBorderSetting();
+                        Invalidate();
+                        break;
+                    case "hide":
+                        PersistBounds();
+                        Hide();
+                        break;
+                }
+            });
+
+            // 悬浮窗始终置顶且右键菜单不可夺取输入焦点。
+            config.TopMost = TopMost;
+            config.UFocus = false;
+            AntdUI.ContextMenuStrip.open(config);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

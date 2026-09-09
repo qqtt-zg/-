@@ -71,7 +71,7 @@
   
   <!-- NuGet包引用 -->
   <ItemGroup>
-    <PackageReference Include="AntdUI" Version="2.2.14" />
+    <PackageReference Include="AntdUI" Version="2.4.8" />
     <PackageReference Include="CefSharp.WinForms" Version="109.1.110" />
     <PackageReference Include="EPPlus" Version="5.0.4" />
     <PackageReference Include="itext" Version="9.3.0" />

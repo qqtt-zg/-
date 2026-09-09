@@ -8,6 +8,7 @@ using Newtonsoft.Json;
 using WindowsFormsApp3.Controls;
 using WindowsFormsApp3.EventArguments;
 using WindowsFormsApp3.Forms.Dialogs; // For EventGroup enum
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Forms.Controls.Settings
@@ -698,8 +699,27 @@ namespace WindowsFormsApp3.Forms.Controls.Settings
                     return;
                 }
 
-                if (MessageBox.Show($"确定要删除预设 '{selectedPreset}' 吗？", "确认删除", 
-                    MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                var modalOwner = FindForm();
+                if (modalOwner == null)
+                {
+                    throw new InvalidOperationException("事件设置控件尚未附加到窗体，无法显示确认弹框。");
+                }
+
+                if (AntdUiModalRenderer.Show(new ModalRequest(
+                    modalOwner,
+                    "确认删除",
+                    $"确定要删除预设 '{selectedPreset}' 吗？",
+                    new[]
+                    {
+                        new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                        {
+                            IsDefault = true
+                        },
+                        new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                    })
+                {
+                    Icon = AntdUI.TType.Warn
+                }) == DialogResult.Yes)
                 {
                     DeletePreset(selectedPreset);
                     LoadEventPresets();
@@ -740,9 +760,29 @@ namespace WindowsFormsApp3.Forms.Controls.Settings
                 var existingPresets = GetEventItemsPresetNames();
                 if (existingPresets.Contains(newPresetName))
                 {
-                    if (MessageBox.Show($"预设 '{newPresetName}' 已存在，是否覆盖？", "确认", 
-                        MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.No)
+                    var modalOwner = FindForm();
+                    if (modalOwner == null)
                     {
+                        throw new InvalidOperationException("事件设置控件尚未附加到窗体，无法显示确认弹框。");
+                    }
+
+                    if (AntdUiModalRenderer.Show(new ModalRequest(
+                        modalOwner,
+                        "确认",
+                        $"预设 '{newPresetName}' 已存在，是否覆盖？",
+                        new[]
+                        {
+                            new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                            {
+                                IsDefault = true
+                            },
+                            new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                        })
+                    {
+                        Icon = AntdUI.TType.Warn
+                        }) != DialogResult.Yes)
+                    {
+                        // 只有明确点击“是”才允许覆盖；Esc、关闭按钮或其他结果均安全取消。
                         return;
                     }
                 }

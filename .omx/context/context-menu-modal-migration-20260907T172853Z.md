@@ -1,0 +1,29 @@
+# Context: Context-menu and modal migration
+
+- Task: clarify a phased migration of native `System.Windows.Forms.ContextMenuStrip` and short `Form.ShowDialog()` dialogs to AntdUI surfaces.
+- Desired outcome: a visual and interaction-consistent application without disrupting file-renaming, PDF, Excel, or system-tray workflows.
+- Stated solution: migrate the two existing UI patterns after upgrading AntdUI to 2.4.8.
+- Intent hypothesis: improve the consistency, polish, and usability of high-frequency desktop interactions.
+- Known facts:
+  - AntdUI was upgraded from 2.2.14 to 2.4.8 in the application and test projects; restore, build, and tests passed.
+  - Business right-click menus currently instantiate WinForms `ContextMenuStrip`; no direct `AntdUI.ContextMenuStrip` construction was found.
+  - `AntdUI.Modal.open` is used in `Forms/Panels/PdfOperationsPanel.cs` for the post-save open-file confirmation.
+  - Many short custom WinForms dialogs occur in `UI/DgvContextMenu.cs`, `Forms/Panels/FileRenamePanel.cs`, and `Forms/Main/MaterialSelectFormModern.cs`.
+  - The system tray uses a native `NotifyIcon.ContextMenuStrip` and should remain a Windows-native integration point unless explicitly reconsidered.
+- Constraints:
+  - .NET Framework 4.8 WinForms application using MVP; UI business behavior must remain unchanged.
+  - Theme system supports dark, light, eye-care green, and classic blue themes.
+  - No new dependencies are implied.
+- Relevant docs inspected:
+  - `AGENTS.md`
+  - `README.md`
+  - `docs/Obsidian知识库/05-操作手册与流程/主题系统.md`
+  - `docs/Obsidian知识库/05-操作手册与流程/文件批量重命名.md`
+- Terminology:
+  - “右键菜单” means the current in-app business menus, distinct from the system tray menu.
+  - “弹框” may mean short confirmation/input dialogs or complex standalone forms; the boundary needs a user decision.
+- Open questions:
+  - Primary success outcome and the first migration slice.
+  - Whether scope is visual-only or includes interaction-model changes.
+  - Explicit non-goals and acceptance criteria.
+- Prompt-safe initial-context summary: not_needed.

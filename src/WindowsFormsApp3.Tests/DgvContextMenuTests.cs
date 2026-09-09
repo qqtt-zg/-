@@ -5,6 +5,7 @@ using Xunit;
 using Moq;
 using WindowsFormsApp3;
 using WindowsFormsApp3.Interfaces;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Tests
 {
@@ -44,11 +45,20 @@ namespace WindowsFormsApp3.Tests
         }
 
         [Fact]
-        public void Constructor_Should_Initialize_Context_Menu()
+        public void Constructor_Should_Initialize_Context_Menu_Presentation_Contract()
         {
             // Assert
             Assert.NotNull(_contextMenu);
-            Assert.NotNull(_dataGridView.ContextMenuStrip);
+            Assert.Null(_dataGridView.ContextMenuStrip);
+            Assert.NotNull(_contextMenu.ContextMenu);
+            Assert.Collection(
+                _contextMenu.ContextMenu,
+                item => Assert.Equal("copy", item.Id),
+                item => Assert.Equal("cut", item.Id),
+                item => Assert.Equal("paste", item.Id),
+                item => Assert.Equal("delete", item.Id),
+                item => Assert.True(item.IsDivider),
+                item => Assert.Equal("refresh", item.Id));
         }
 
         [Fact]
@@ -106,14 +116,18 @@ namespace WindowsFormsApp3.Tests
         }
 
         [Fact]
-        public void ContextMenu_Property_Should_Return_Context_Menu_Instance()
+        public void ContextMenu_Property_Should_Return_Presentation_Contract()
         {
             // Act
             var contextMenu = _contextMenu.ContextMenu;
 
             // Assert
             Assert.NotNull(contextMenu);
-            Assert.IsType<ContextMenuStrip>(contextMenu);
+            Assert.IsAssignableFrom<IReadOnlyList<ContextMenuItemSpec>>(contextMenu);
+            Assert.Equal("Ctrl+C", contextMenu[0].ShortcutText);
+            Assert.Equal("Ctrl+X", contextMenu[1].ShortcutText);
+            Assert.Equal("Ctrl+V", contextMenu[2].ShortcutText);
+            Assert.True(contextMenu[3].IsDangerous);
         }
 
         [Fact]

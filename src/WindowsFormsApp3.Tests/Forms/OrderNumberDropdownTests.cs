@@ -8,6 +8,7 @@ using AntdUI;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Services;
+using WindowsFormsApp3.UI;
 using Xunit;
 
 namespace WindowsFormsApp3.Tests.Forms
@@ -48,7 +49,7 @@ namespace WindowsFormsApp3.Tests.Forms
                 var modeBtn = form.BtnOrderNumberMode;
                 var orderInput = typeof(MaterialSelectFormModern).GetField("orderNumberTextBox", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form) as AntdUI.Input;
                 var orderLabel = typeof(MaterialSelectFormModern).GetField("orderNumberLabel", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(form) as AntdUI.Label;
-                var menu = form.OrderNumberModeMenu;
+                var menu = form.OrderNumberModeMenuItems;
 
                 Assert.NotNull(modeBtn);
                 Assert.NotNull(orderInput);
@@ -61,23 +62,24 @@ namespace WindowsFormsApp3.Tests.Forms
                 Assert.Equal(new Point(197, 329), orderInput.Location);
                 Assert.Equal(new Point(150, 333), orderLabel.Location);
 
-                // 2. 验证主菜单结构
-                Assert.Equal(3, menu.Items.Count);
-                Assert.Equal("无", menu.Items[0].Text);
-                Assert.Equal("自动递增", menu.Items[1].Text);
-                Assert.Equal("正则提取", menu.Items[2].Text);
+                // 2. 验证 AntdUI 请求模型的主菜单结构
+                Assert.Equal(3, menu.Count);
+                Assert.Equal("order-mode-none", menu[0].Id);
+                Assert.Equal("无", menu[0].Text);
+                Assert.Equal("自动递增", menu[1].Text);
+                Assert.Equal("正则提取", menu[2].Text);
 
                 // 3. 验证正则提取二级子菜单
-                var regexMenuItem = menu.Items[2] as ToolStripMenuItem;
+                var regexMenuItem = menu[2];
                 Assert.NotNull(regexMenuItem);
-                Assert.True(regexMenuItem.DropDownItems.Count > 0, "正则提取子菜单应包含已配置规则");
+                Assert.True(regexMenuItem.Items.Count > 0, "正则提取子菜单应包含已配置规则");
 
                 // 4. 验证默认状态为【无】
                 Assert.Equal(OrderNumberMode.None, form.CurrentOrderNumberMode);
                 Assert.Equal("无 ▾", modeBtn.Text);
-                Assert.True(((ToolStripMenuItem)menu.Items[0]).Checked);
-                Assert.False(((ToolStripMenuItem)menu.Items[1]).Checked);
-                Assert.False(((ToolStripMenuItem)menu.Items[2]).Checked);
+                Assert.True(menu[0].Checked);
+                Assert.False(menu[1].Checked);
+                Assert.False(menu[2].Checked);
             }
         }
 

@@ -8,6 +8,7 @@ using WindowsFormsApp3.Services.Events;
 using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Forms.Main;
 using WindowsFormsApp3.Forms.Panels;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Controls.Settings
 {
@@ -879,8 +880,27 @@ namespace WindowsFormsApp3.Forms.Controls.Settings
                 return;
             }
 
-            var result = MessageBox.Show($"确定要删除主题 \"{_editingTheme.Name}\" 吗？",
-                "确认删除", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            var modalOwner = FindForm();
+            if (modalOwner == null)
+            {
+                throw new InvalidOperationException("主题编辑器尚未附加到窗体，无法显示确认弹框。");
+            }
+
+            var result = AntdUiModalRenderer.Show(new ModalRequest(
+                modalOwner,
+                "确认删除",
+                $"确定要删除主题 \"{_editingTheme.Name}\" 吗？",
+                new[]
+                {
+                    new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                    {
+                        IsDefault = true
+                    },
+                    new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                })
+            {
+                Icon = AntdUI.TType.Warn
+            });
 
             if (result == DialogResult.Yes)
             {
@@ -914,8 +934,27 @@ namespace WindowsFormsApp3.Forms.Controls.Settings
                 return;
             }
 
-            var result = MessageBox.Show($"确定要将主题 \"{_editingTheme.Name}\" 重置为默认设置吗？",
-                "确认重置", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            var modalOwner = FindForm();
+            if (modalOwner == null)
+            {
+                throw new InvalidOperationException("主题编辑器尚未附加到窗体，无法显示确认弹框。");
+            }
+
+            var result = AntdUiModalRenderer.Show(new ModalRequest(
+                modalOwner,
+                "确认重置",
+                $"确定要将主题 \"{_editingTheme.Name}\" 重置为默认设置吗？",
+                new[]
+                {
+                    new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                    {
+                        IsDefault = true
+                    },
+                    new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                })
+            {
+                Icon = AntdUI.TType.Warn
+            });
 
             if (result == DialogResult.Yes)
             {

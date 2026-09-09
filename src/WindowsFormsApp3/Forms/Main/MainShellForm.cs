@@ -10,6 +10,7 @@ using WindowsFormsApp3.Utils; // For AppSettings
 using WindowsFormsApp3.Forms.Panels;
 using WindowsFormsApp3.Services;
 using WindowsFormsApp3.Models;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Main
 {
@@ -60,6 +61,7 @@ namespace WindowsFormsApp3.Forms.Main
         private int toggleHotkeyId = 1;
         private IntPtr toggleHotkeyAtom = IntPtr.Zero;
         private bool _allowClose = false;
+        private bool _exitRequested = false;
 
         private void TitlePanel_MouseDown(object sender, MouseEventArgs e)
         {
@@ -475,7 +477,7 @@ namespace WindowsFormsApp3.Forms.Main
         {
             // 获取程序集版本
             var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-            string versionStr = version != null ? $"V{version.Major}.{version.Minor}.{version.Build}" : "V2.6.0";
+            string versionStr = version != null ? $"V{version.Major}.{version.Minor}.{version.Build}" : "V2.6.2";
             
             MessageBox.Show($"大诚工具箱 (Prepress Toolbox)\n版本: {versionStr}\n\n一个专业的印前处理辅助工具。", 
                 "关于", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -618,13 +620,34 @@ namespace WindowsFormsApp3.Forms.Main
         
         private void ShowMoreMenu(Control anchor)
         {
-            var contextMenu = new ContextMenuStrip();
-            contextMenu.Items.Add("打开日志", null, (s, e) => OpenLogFolder());
-            contextMenu.Items.Add("关于", null, (s, e) => ShowAboutDialog());
-            contextMenu.Items.Add("-");
-            contextMenu.Items.Add("退出", null, (s, e) => ExitApplication());
-            
-            contextMenu.Show(anchor, new Point(anchor.Width, 0)); // Show to the right
+            AntdUiContextMenuRenderer.Show(new ContextMenuRequest(anchor, new[]
+            {
+                new ContextMenuItemSpec("open-log", "打开日志"),
+                new ContextMenuItemSpec("about", "关于"),
+                ContextMenuItemSpec.Divider(),
+                new ContextMenuItemSpec("exit", "退出")
+                {
+                    IsDangerous = true
+                }
+            })
+            {
+                Location = new Point(anchor.Width, 0)
+            }, item =>
+            {
+                switch (item.Id)
+                {
+                    case "open-log":
+                        OpenLogFolder();
+                        break;
+                    case "about":
+                        ShowAboutDialog();
+                        break;
+                    case "exit":
+                        // AntdUI 菜单会在回调期间枚举并关闭分层窗体；延后退出避免修改枚举中的窗体集合。
+                        UiActionDispatcher.Defer(this, ExitApplication);
+                        break;
+                }
+            });
         }
         
         /// <summary>
@@ -984,6 +1007,12 @@ namespace WindowsFormsApp3.Forms.Main
         /// </summary>
         private void ExitApplication()
         {
+            if (_exitRequested)
+            {
+                return;
+            }
+
+            _exitRequested = true;
             _allowClose = true;
             trayIcon.Visible = false;
             trayIcon.Dispose();
@@ -995,7 +1024,9 @@ namespace WindowsFormsApp3.Forms.Main
                 GlobalDeleteAtom(toggleHotkeyAtom);
             }
 
-            Application.Exit();
+            // 主窗体由 Application.Run 承载。关闭主窗体会让消息循环自然结束，
+            // 避免 Application.Exit 在 AntdUI 分层窗体关闭期间修改正在枚举的窗体集合。
+            Close();
         }
         
         /// <summary>

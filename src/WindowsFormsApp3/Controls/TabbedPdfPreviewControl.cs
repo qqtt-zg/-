@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using AntdUI;
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Controls
@@ -19,7 +20,6 @@ namespace WindowsFormsApp3.Controls
         #region Fields
 
         private AntdUI.Tabs _tabs;
-        private System.Windows.Forms.ContextMenuStrip _tabContextMenu;
         private CefPdfPreviewControl _emptyStateControl; // 空状态下的全功能PDF控件
         private System.Windows.Forms.Panel _tabHeaderPanel; // 标签页顶部面板
         private AntdUI.Button _closeTabButton; // 关闭当前标签页按钮
@@ -187,19 +187,6 @@ namespace WindowsFormsApp3.Controls
             _emptyStateControl.Dock = DockStyle.Fill;
             // 初始化浏览器，让它显示viewer.html
             _emptyStateControl.InitializeBrowser(); 
-
-            // 创建右键菜单
-            _tabContextMenu = new System.Windows.Forms.ContextMenuStrip();
-            var closeItem = new System.Windows.Forms.ToolStripMenuItem("关闭当前标签页");
-            closeItem.Click += (s, e) => { if (_currentTabIndex >= 0) CloseTab(_currentTabIndex); };
-            var closeAllItem = new System.Windows.Forms.ToolStripMenuItem("关闭所有标签页");
-            closeAllItem.Click += (s, e) => CloseAllTabs();
-            
-            _tabContextMenu.Items.Add(closeItem);
-            _tabContextMenu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-            _tabContextMenu.Items.Add(closeAllItem);
-            
-            _tabs.ContextMenuStrip = _tabContextMenu;
 
             // 添加控件
             // 先添加emptyStateControl，再添加tabHeaderPanel
@@ -577,6 +564,13 @@ namespace WindowsFormsApp3.Controls
 
         private void OnTabsMouseDown(object sender, MouseEventArgs e)
         {
+            if (e.Button == MouseButtons.Right)
+            {
+                // AntdUI 会在 MouseDown 时更新标签页选择状态；延迟显示可保持原有“当前标签页”语义。
+                BeginInvoke(new Action(() => ShowTabContextMenu(e.Location)));
+                return;
+            }
+
             if (e.Button == MouseButtons.Middle)
             {
                 // 鼠标中键关闭标签页
@@ -592,6 +586,46 @@ namespace WindowsFormsApp3.Controls
                     }
                 }));
             }
+        }
+
+        private void ShowTabContextMenu(Point location)
+        {
+            // 关闭当前标签页一直以当前活动标签为目标，避免菜单打开期间的选择变化影响命令对象。
+            var currentTabIndex = _currentTabIndex;
+            var request = new ContextMenuRequest(
+                _tabs,
+                new[]
+                {
+                    new ContextMenuItemSpec("close-current-tab", "关闭当前标签页")
+                    {
+                        Enabled = currentTabIndex >= 0 && currentTabIndex < _tabInfos.Count
+                    },
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("close-all-tabs", "关闭所有标签页")
+                    {
+                        Enabled = _tabInfos.Count > 0
+                    }
+                })
+            {
+                // 该菜单由 BeginInvoke 延后显示，必须使用 MouseDown 时已捕获的点击坐标。
+                Location = location
+            };
+
+            AntdUiContextMenuRenderer.Show(request, item =>
+            {
+                switch (item.Id)
+                {
+                    case "close-current-tab":
+                        if (currentTabIndex >= 0 && currentTabIndex < _tabInfos.Count)
+                        {
+                            CloseTab(currentTabIndex);
+                        }
+                        break;
+                    case "close-all-tabs":
+                        CloseAllTabs();
+                        break;
+                }
+            });
         }
 
         private void OnTabsControlRemoved(object sender, ControlEventArgs e)

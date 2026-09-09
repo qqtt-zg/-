@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using WindowsFormsApp3.Controls;
 using WindowsFormsApp3.Forms.Utils;
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Services;
 
@@ -257,12 +258,31 @@ namespace WindowsFormsApp3.Forms.Panels
                         Task.Delay(100).ContinueWith(_ => HideBottomProgress());
                         
                         // 询问是否打开新文件
-                        var result = AntdUI.Modal.open(new AntdUI.Modal.Config(this.FindForm(), "打开文件", 
-                            "是否打开另存的文件？")
+                        var modalOwner = FindForm();
+                        if (modalOwner == null)
+                        {
+                            throw new InvalidOperationException("PDF 操作面板尚未附加到窗体，无法显示确认弹框。");
+                        }
+
+                        var result = AntdUiModalRenderer.Show(new ModalRequest(
+                            modalOwner,
+                            "打开文件",
+                            "是否打开另存的文件？",
+                            new[]
+                            {
+                                new ModalButtonSpec("open", "打开", DialogResult.OK, AntdUI.TTypeMini.Primary)
+                                {
+                                    IsDefault = true
+                                },
+                                new ModalButtonSpec("cancel", "取消", DialogResult.Cancel, AntdUI.TTypeMini.Default)
+                                {
+                                    IsCancel = true
+                                }
+                            })
                         {
                             Icon = AntdUI.TType.Info,
-                            OkText = "打开",
-                            CancelText = "取消"
+                            // 保留原 AntdUI.Modal.Config 的默认蒙层点击关闭行为。
+                            MaskClosable = true
                         });
 
                         if (result == DialogResult.OK)

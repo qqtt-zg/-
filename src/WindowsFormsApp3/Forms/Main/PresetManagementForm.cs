@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using WindowsFormsApp3.Models;
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Forms.Main
@@ -378,11 +379,21 @@ namespace WindowsFormsApp3.Forms.Main
         {
             if (_selectedPreset != null)
             {
-                var result = MessageBox.Show(
-                    $"确定要删除预设\"{_selectedPreset.Name}\"吗？",
+                var result = AntdUiModalRenderer.Show(new ModalRequest(
+                    this,
                     "确认删除",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question);
+                    $"确定要删除预设\"{_selectedPreset.Name}\"吗？",
+                    new[]
+                    {
+                        new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                        {
+                            IsDefault = true
+                        },
+                        new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                    })
+                {
+                    Icon = AntdUI.TType.Warn
+                });
 
                 if (result == DialogResult.Yes)
                 {

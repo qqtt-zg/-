@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Windows.Forms;
 using Ookii.Dialogs.WinForms;
+using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.UI
 {
@@ -47,7 +49,7 @@ namespace WindowsFormsApp3.UI
         /// <returns>用户选择的结果</returns>
         public static DialogResult ShowConfirmMessage(string message, string title = "确认")
         {
-            return MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            return ShowYesNoConfirmation(ResolveOwner(), message, title);
         }
 
         /// <summary>
@@ -58,7 +60,38 @@ namespace WindowsFormsApp3.UI
         /// <returns>用户选择的结果</returns>
         public static DialogResult ShowConfirmDialog(string message, string title = "确认")
         {
-            return MessageBox.Show(message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            return ShowYesNoConfirmation(ResolveOwner(), message, title);
+        }
+
+        /// <summary>
+        /// 使用显式所有者显示“是/否”确认框；无法解析所有者时记录并安全取消。
+        /// </summary>
+        public static DialogResult ShowYesNoConfirmation(Form owner, string message, string title = "确认")
+        {
+            if (owner == null || owner.IsDisposed)
+            {
+                LogHelper.Warn($"无法显示确认弹框：没有有效的所有者窗体。标题：{title}");
+                return DialogResult.No;
+            }
+
+            return AntdUiModalRenderer.Show(new ModalRequest(owner, title, message, new[]
+            {
+                new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                {
+                    IsDefault = true
+                },
+                new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+            })
+            {
+                Icon = AntdUI.TType.Info,
+                Keyboard = true,
+                MaskClosable = false
+            });
+        }
+
+        private static Form ResolveOwner()
+        {
+            return Form.ActiveForm ?? Application.OpenForms.Cast<Form>().FirstOrDefault(form => form.Visible && !form.IsDisposed);
         }
 
         /// <summary>

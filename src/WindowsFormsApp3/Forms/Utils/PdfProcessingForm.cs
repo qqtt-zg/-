@@ -11,6 +11,7 @@ using WindowsFormsApp3.Interfaces;
 using LogLevel = WindowsFormsApp3.Interfaces.LogLevel;
 using WindowsFormsApp3.Presenters;
 using WindowsFormsApp3.Utils;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3
 {
@@ -542,7 +543,7 @@ namespace WindowsFormsApp3
 
         public bool RequestConfirmation(string message, string title = "确认")
         {
-            return MessageBox.Show(this, message, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
+            return UIHelper.ShowYesNoConfirmation(this, message, title) == DialogResult.Yes;
         }
 
         public string RequestUserInput(string prompt, string title = "输入", string defaultValue = "")

@@ -5,8 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using WindowsFormsApp3.Forms.Dialogs;
 using WindowsFormsApp3.EventArguments;
-
-
+using WindowsFormsApp3.UI;
 using WindowsFormsApp3.Utils;
 
 namespace WindowsFormsApp3.Controls
@@ -25,10 +24,9 @@ namespace WindowsFormsApp3.Controls
         public AntdUI.Select cboPresets;
         public Label lblPresets;
 
-        // 保留状态功能相关
-        private ContextMenuStrip _nodeContextMenu;
-        private ToolStripMenuItem _miPreserveGroup;
-        private ToolStripMenuItem _miClearAllPreserve;
+        // 右键菜单项标识。命令和状态仍由当前控件维护，渲染由 AntdUI 适配层负责。
+        private const string PreserveGroupMenuItemId = "preserve-group";
+        private const string ClearAllPreserveMenuItemId = "clear-all-preserve";
 
         // 兼容性图标配置
         private static readonly string PRESERVE_ICON = "[保留]";  // Windows 7兼容
@@ -262,21 +260,7 @@ namespace WindowsFormsApp3.Controls
         /// </summary>
         private void InitializeContextMenu()
         {
-            _nodeContextMenu = new ContextMenuStrip();
-
-            // 项目保留设置
-            _miPreserveGroup = new ToolStripMenuItem("设为保留分组");
-            _miPreserveGroup.Click += (s, e) => ToggleGroupPreserve();
-            _nodeContextMenu.Items.Add(_miPreserveGroup);
-
-            _nodeContextMenu.Items.Add(new ToolStripSeparator());
-
-            // 清除所有保留
-            _miClearAllPreserve = new ToolStripMenuItem("清除所有保留");
-            _miClearAllPreserve.Click += (s, e) => ClearAllPreserve();
-            _nodeContextMenu.Items.Add(_miClearAllPreserve);
-
-            // 绑定TreeView鼠标事件
+            // 绑定 TreeView 鼠标事件。菜单本身在每次右键时按当前节点状态构建。
             treeView.MouseDown += TreeView_MouseDown;
         }
 
@@ -408,35 +392,57 @@ namespace WindowsFormsApp3.Controls
                     // 选中节点
                     treeView.SelectedNode = clickedNode;
 
-                    // 更新菜单状态
-                    UpdateContextMenuState(clickedNode, nodeData);
-
-                    // 显示右键菜单
-                    _nodeContextMenu.Show(treeView, e.X, e.Y);
+                    ShowNodeContextMenu(nodeData, e.Location);
                 }
             }
         }
 
         /// <summary>
-        /// 更新右键菜单状态
+        /// 根据当前所选节点构建右键菜单。命令仍读取 SelectedNode，保持原有行为。
         /// </summary>
-        private void UpdateContextMenuState(TreeNode node, TreeNodeData nodeData)
+        private void ShowNodeContextMenu(TreeNodeData nodeData, Point location)
         {
-            if (nodeData.NodeType == TreeNodeType.Item)
+            var isGroup = nodeData.NodeType == TreeNodeType.Group;
+            var preserveGroupItem = new ContextMenuItemSpec(
+                PreserveGroupMenuItemId,
+                isGroup
+                    ? (nodeData.IsPreserved ? "取消保留分组" : "设为保留分组")
+                    : "请右键点击分组设置保留")
             {
-                // 项目节点不支持设置保留
-                _miPreserveGroup.Text = "请右键点击分组设置保留";
-                _miPreserveGroup.Enabled = false;
-            }
-            else if (nodeData.NodeType == TreeNodeType.Group)
-            {
-                // 分组节点可以设置保留状态
-                _miPreserveGroup.Text = nodeData.IsPreserved ? "取消保留分组" : "设为保留分组";
-                _miPreserveGroup.Enabled = true;
-            }
+                Enabled = isGroup,
+                Checked = isGroup && nodeData.IsPreserved
+            };
 
-            // 检查是否有保留的项目
-            _miClearAllPreserve.Enabled = HasAnyPreservedItems();
+            var clearAllItem = new ContextMenuItemSpec(ClearAllPreserveMenuItemId, "清除所有保留")
+            {
+                Enabled = HasAnyPreservedItems()
+            };
+
+            var request = new ContextMenuRequest(
+                treeView,
+                new[]
+                {
+                    preserveGroupItem,
+                    ContextMenuItemSpec.Divider(),
+                    clearAllItem
+                })
+            {
+                Location = location,
+                UseMousePosition = true
+            };
+
+            AntdUiContextMenuRenderer.Show(request, item =>
+            {
+                switch (item.Id)
+                {
+                    case PreserveGroupMenuItemId:
+                        ToggleGroupPreserve();
+                        break;
+                    case ClearAllPreserveMenuItemId:
+                        ClearAllPreserve();
+                        break;
+                }
+            });
         }
 
         /// <summary>
@@ -996,13 +1002,7 @@ namespace WindowsFormsApp3.Controls
                          $"• 点击【是】：清除现有保留状态，设置新保留分组\n" +
                          $"• 点击【否】：取消操作，保持现有设置";
 
-            var result = MessageBox.Show(
-                message,
-                "保留分组冲突提示",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2
-            );
+            var result = ShowPreserveConflictModal("保留分组冲突提示", message);
 
             return result == DialogResult.Yes;
         }
@@ -1081,15 +1081,40 @@ namespace WindowsFormsApp3.Controls
                          $"• 点击【是】：清除现有保留状态，设置新保留项目\n" +
                          $"• 点击【否】：取消操作，保持现有设置";
 
-            var result = MessageBox.Show(
-                message,
-                "保留项目冲突提示",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2
-            );
+            var result = ShowPreserveConflictModal("保留项目冲突提示", message);
 
             return result == DialogResult.Yes;
+        }
+
+        /// <summary>
+        /// 显示保留状态冲突确认框。默认焦点保持在“否”，与原 MessageBox 的 Button2 语义一致。
+        /// </summary>
+        private DialogResult ShowPreserveConflictModal(string title, string message)
+        {
+            var modalOwner = FindForm();
+            if (modalOwner == null)
+            {
+                throw new InvalidOperationException("事件分组控件尚未附加到窗体，无法显示确认弹框。");
+            }
+
+            return AntdUiModalRenderer.Show(new ModalRequest(
+                modalOwner,
+                title,
+                message,
+                new[]
+                {
+                    // 显式声明原 MessageBox 的 Button2 默认选择为“否”。
+                    new ModalButtonSpec("no", "否", DialogResult.No, AntdUI.TTypeMini.Default)
+                    {
+                        IsDefault = true
+                    },
+                    new ModalButtonSpec("yes", "是", DialogResult.Yes, AntdUI.TTypeMini.Primary)
+                })
+            {
+                Icon = AntdUI.TType.Warn,
+                Keyboard = true,
+                MaskClosable = false
+            });
         }
 
         /// <summary>

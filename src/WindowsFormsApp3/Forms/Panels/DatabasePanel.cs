@@ -7,6 +7,7 @@ using System.ComponentModel;
 using System.Linq;
 using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Services;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Forms.Panels
 {
@@ -15,7 +16,6 @@ namespace WindowsFormsApp3.Forms.Panels
     /// </summary>
     public partial class DatabasePanel : BasePanelControl
     {
-        private ContextMenuStrip _contextMenu;
         private int _currentColumnIndex = -1;
         private int _currentRowIndex = -1;
         private IExcelImportService _excelImportService;
@@ -42,9 +42,6 @@ namespace WindowsFormsApp3.Forms.Panels
 
                 // 配置 KryptonDataGridView（控件已在 Designer.cs 中创建）
                 InitializeExcelTable();
-
-                // 初始化右键菜单
-                InitializeContextMenu();
 
                 // 加载数据
                 LoadExcelData();
@@ -121,8 +118,36 @@ namespace WindowsFormsApp3.Forms.Panels
         {
             if (e.Button == MouseButtons.Right && e.RowIndex >= 0)
             {
-                var rect = _excelTable.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, true);
-                _contextMenu.Show(_excelTable, rect.Left, rect.Bottom);
+                AntdUiContextMenuRenderer.Show(new ContextMenuRequest(
+                    _excelTable,
+                    new[]
+                    {
+                        new ContextMenuItemSpec("copy", "复制"),
+                        new ContextMenuItemSpec("delete-row", "删除行")
+                        {
+                            IsDangerous = true
+                        },
+                        ContextMenuItemSpec.Divider(),
+                        new ContextMenuItemSpec("refresh", "刷新")
+                    })
+                {
+                    Location = ContextMenuRequest.GetMouseInvocationLocation(e.X, e.Y),
+                    UseMousePosition = true
+                }, item =>
+                {
+                    switch (item.Id)
+                    {
+                        case "copy":
+                            CopySelectedCell();
+                            break;
+                        case "delete-row":
+                            DeleteSelectedRow();
+                            break;
+                        case "refresh":
+                            LoadExcelData();
+                            break;
+                    }
+                });
             }
         }
 
@@ -146,25 +171,6 @@ namespace WindowsFormsApp3.Forms.Panels
                 
                 e.Graphics.DrawString(rowNumber, _excelTable.Font, brush, x, y);
             }
-        }
-
-        private void InitializeContextMenu()
-        {
-            _contextMenu = new ContextMenuStrip();
-            
-            var copyItem = new ToolStripMenuItem("复制");
-            copyItem.Click += (s, e) => CopySelectedCell();
-            _contextMenu.Items.Add(copyItem);
-
-            var deleteItem = new ToolStripMenuItem("删除行");
-            deleteItem.Click += (s, e) => DeleteSelectedRow();
-            _contextMenu.Items.Add(deleteItem);
-
-            _contextMenu.Items.Add(new ToolStripSeparator());
-
-            var refreshItem = new ToolStripMenuItem("刷新");
-            refreshItem.Click += (s, e) => LoadExcelData();
-            _contextMenu.Items.Add(refreshItem);
         }
 
         private void CopySelectedCell()
@@ -254,7 +260,6 @@ namespace WindowsFormsApp3.Forms.Panels
         {
             if (disposing)
             {
-                _contextMenu?.Dispose();
                 components?.Dispose();
             }
             base.Dispose(disposing);

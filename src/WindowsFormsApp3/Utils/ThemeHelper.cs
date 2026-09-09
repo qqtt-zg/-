@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using WindowsFormsApp3.Models;
 using WindowsFormsApp3.Controls;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3.Utils
 {
@@ -35,6 +36,7 @@ namespace WindowsFormsApp3.Utils
         {
             if (theme == null) return;
             _currentTheme = theme;
+            AntdUiThemeBridge.Apply(theme);
             ApplyTheme(root);
         }
 
@@ -65,6 +67,8 @@ namespace WindowsFormsApp3.Utils
                 // 如果没有设置主题，无法应用
                 return;
             }
+
+            AntdUiThemeBridge.Apply(_currentTheme);
             
             if (root == null) return;
             ApplyToControl(root);

@@ -850,8 +850,7 @@ namespace WindowsFormsApp3
                 Font = new Font("Microsoft YaHei UI", 8.5F),
                 RowTemplate = { Height = 26 },
                 ColumnHeadersHeight = 26,
-                ScrollBars = ScrollBars.None,
-                ContextMenuStrip = _batchContextMenu
+                ScrollBars = ScrollBars.None
             };
 
             var colIndex = new DataGridViewTextBoxColumn
@@ -955,7 +954,7 @@ namespace WindowsFormsApp3
                         dgv.CurrentCell = clickedCell;
                     }
 
-                    _batchContextMenu?.Show(dgv, new Point(e.X, e.Y));
+                    ShowBatchContextMenu(dgv, new Point(e.X, e.Y));
                 }
             };
 

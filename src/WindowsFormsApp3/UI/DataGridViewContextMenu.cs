@@ -1,6 +1,7 @@
 using System.Windows.Forms;
 using System.Collections.Generic;
 using System;
+using System.Drawing;
 
 namespace WindowsFormsApp3.UI
 {
@@ -10,7 +11,6 @@ namespace WindowsFormsApp3.UI
     public class DataGridViewContextMenu
     {
         private DataGridView _dataGridView;
-        private ContextMenuStrip _contextMenuStrip;
         private List<string> _customItems = new List<string>();
 
         /// <summary>
@@ -54,76 +54,61 @@ namespace WindowsFormsApp3.UI
         /// </summary>
         private void Initialize()
         {
-            _contextMenuStrip = new ContextMenuStrip();
-            _dataGridView.ContextMenuStrip = _contextMenuStrip;
-
             // 监听单元格点击事件
             _dataGridView.CellMouseDown += DataGridView_CellMouseDown;
+            _dataGridView.CellMouseUp += DataGridView_CellMouseUp;
             _dataGridView.CellClick += DataGridView_CellClick;
-
-            // 创建默认菜单项
-            CreateDefaultMenuItems();
+            _dataGridView.KeyDown += DataGridView_KeyDown;
         }
 
         /// <summary>
         /// 创建默认菜单项
         /// </summary>
-        private void CreateDefaultMenuItems()
+        private IReadOnlyList<ContextMenuItemSpec> CreateDefaultMenuItems()
         {
-            _contextMenuStrip.Items.Clear();
+            var items = new List<ContextMenuItemSpec>
+            {
+                new ContextMenuItemSpec("copy", "复制")
+                {
+                    ShortcutText = "Ctrl+C"
+                },
+                new ContextMenuItemSpec("cut", "剪切")
+                {
+                    ShortcutText = "Ctrl+X"
+                },
+                new ContextMenuItemSpec("paste", "粘贴")
+                {
+                    ShortcutText = "Ctrl+V"
+                },
+                new ContextMenuItemSpec("delete", "删除")
+                {
+                    IsDangerous = true
+                },
+                ContextMenuItemSpec.Divider(),
+                new ContextMenuItemSpec("refresh", "刷新")
+            };
 
-            // 复制
-            var copyItem = new ToolStripMenuItem("复制");
-            copyItem.ShortcutKeys = Keys.Control | Keys.C;
-            copyItem.Click += (sender, e) => CopySelectedCellValue();
-            _contextMenuStrip.Items.Add(copyItem);
-
-            // 剪切
-            var cutItem = new ToolStripMenuItem("剪切");
-            cutItem.ShortcutKeys = Keys.Control | Keys.X;
-            cutItem.Click += (sender, e) => CutSelectedCellValue();
-            _contextMenuStrip.Items.Add(cutItem);
-
-            // 粘贴
-            var pasteItem = new ToolStripMenuItem("粘贴");
-            pasteItem.ShortcutKeys = Keys.Control | Keys.V;
-            pasteItem.Click += (sender, e) => PasteCellValue();
-            _contextMenuStrip.Items.Add(pasteItem);
-
-            // 删除
-            var deleteItem = new ToolStripMenuItem("删除");
-            deleteItem.Click += (sender, e) => DeleteSelectedCells();
-            _contextMenuStrip.Items.Add(deleteItem);
-
-            // 分隔线
-            _contextMenuStrip.Items.Add(new ToolStripSeparator());
-
-            // 刷新
-            var refreshItem = new ToolStripMenuItem("刷新");
-            refreshItem.Click += (sender, e) => RefreshDataGridView();
-            _contextMenuStrip.Items.Add(refreshItem);
-
-            // 添加自定义菜单项
             if (_customItems != null && _customItems.Count > 0)
             {
-                _contextMenuStrip.Items.Add(new ToolStripSeparator());
-                AddCustomMenuItems();
+                items.Add(ContextMenuItemSpec.Divider());
+                AddCustomMenuItems(items);
             }
+
+            return items;
         }
 
         /// <summary>
         /// 添加自定义菜单项
         /// </summary>
-        private void AddCustomMenuItems()
+        private void AddCustomMenuItems(ICollection<ContextMenuItemSpec> items)
         {
-            foreach (var itemText in _customItems)
+            for (var index = 0; index < _customItems.Count; index++)
             {
-                var customItem = new ToolStripMenuItem(itemText);
-                customItem.Click += (sender, e) =>
+                var itemText = _customItems[index];
+                items.Add(new ContextMenuItemSpec($"custom-{index}", itemText)
                 {
-                    OnCustomMenuItemClick(new CustomMenuItemClickEventArgs(itemText, CurrentColumnName));
-                };
-                _contextMenuStrip.Items.Add(customItem);
+                    Tag = itemText
+                });
             }
         }
 
@@ -132,7 +117,7 @@ namespace WindowsFormsApp3.UI
         /// </summary>
         public void RefreshContextMenu()
         {
-            CreateDefaultMenuItems();
+            // 菜单在显示时按当前配置创建，无需保留原生菜单实例。
         }
 
         /// <summary>
@@ -151,6 +136,99 @@ namespace WindowsFormsApp3.UI
             if (e.Button == MouseButtons.Right)
             {
                 UpdateCurrentColumnName(new DataGridViewCellEventArgs(e.ColumnIndex, e.RowIndex));
+            }
+        }
+
+        /// <summary>
+        /// 右键释放时按原生菜单的目标位置显示 AntdUI 菜单。
+        /// </summary>
+        private void DataGridView_CellMouseUp(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+            {
+                return;
+            }
+
+            AntdUiContextMenuRenderer.Show(new ContextMenuRequest(
+                _dataGridView,
+                CreateDefaultMenuItems())
+            {
+                Location = new Point(e.X, e.Y),
+                UseMousePosition = true
+            }, HandleMenuItemSelected);
+        }
+
+        /// <summary>
+        /// 保留原生菜单中 Ctrl+C、Ctrl+X 和 Ctrl+V 的快捷键语义。
+        /// </summary>
+        private void DataGridView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (ContextMenuRequest.IsKeyboardInvocation(e.KeyCode, e.Modifiers))
+            {
+                AntdUiContextMenuRenderer.Show(new ContextMenuRequest(
+                    _dataGridView,
+                    CreateDefaultMenuItems())
+                {
+                    Location = ContextMenuRequest.GetKeyboardInvocationLocation(_dataGridView)
+                }, HandleMenuItemSelected);
+
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.Modifiers != Keys.Control)
+            {
+                return;
+            }
+
+            switch (e.KeyCode)
+            {
+                case Keys.C:
+                    CopySelectedCellValue();
+                    break;
+                case Keys.X:
+                    CutSelectedCellValue();
+                    break;
+                case Keys.V:
+                    PasteCellValue();
+                    break;
+                default:
+                    return;
+            }
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        /// <summary>
+        /// 保持菜单命令与原有业务处理方法一一对应。
+        /// </summary>
+        private void HandleMenuItemSelected(ContextMenuItemSpec item)
+        {
+            switch (item.Id)
+            {
+                case "copy":
+                    CopySelectedCellValue();
+                    break;
+                case "cut":
+                    CutSelectedCellValue();
+                    break;
+                case "paste":
+                    PasteCellValue();
+                    break;
+                case "delete":
+                    DeleteSelectedCells();
+                    break;
+                case "refresh":
+                    RefreshDataGridView();
+                    break;
+                default:
+                    if (item.Id.StartsWith("custom-", StringComparison.Ordinal))
+                    {
+                        OnCustomMenuItemClick(new CustomMenuItemClickEventArgs((string)item.Tag, CurrentColumnName));
+                    }
+                    break;
             }
         }
 

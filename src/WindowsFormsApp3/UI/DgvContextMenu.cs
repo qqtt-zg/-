@@ -9,6 +9,7 @@ using System.ComponentModel;
 using WindowsFormsApp3.Interfaces; // 修改为使用Interfaces命名空间的ILogger
 using WindowsFormsApp3.Utils;
 using WindowsFormsApp3.Services;
+using WindowsFormsApp3.UI;
 
 namespace WindowsFormsApp3
 {
@@ -18,7 +19,7 @@ namespace WindowsFormsApp3
     public class DgvContextMenu
     {
         private DataGridView _dgv;
-        private ContextMenuStrip _contextMenu;
+        private List<ContextMenuItemSpec> _contextMenuItems;
         private List<string> _materials; // 存储材料类别
         private string _currentColumnName; // 当前点击的列名
         private Interfaces.ILogger _logger; // 日志服务，明确指定使用Interfaces命名空间的ILogger
@@ -41,6 +42,7 @@ namespace WindowsFormsApp3
             _dgv.CellClick += Dgv_CellClick;
             // 监听单元格鼠标按下事件，专门处理右键点击
             _dgv.CellMouseDown += Dgv_CellMouseDown;
+            _dgv.KeyDown += Dgv_KeyDown;
 
             _logger?.LogInformation("DgvContextMenu初始化完成");
         }
@@ -94,9 +96,10 @@ namespace WindowsFormsApp3
                     CreateContextMenuForColumn(_currentColumnName);
 
                     // 确保右键菜单显示
-                    if (_contextMenu != null && _contextMenu.Items.Count > 0)
+                    if (_contextMenuItems != null && _contextMenuItems.Count > 0)
                     {
-                        _logger?.LogInformation($"右键菜单已创建，包含 {_contextMenu.Items.Count} 个菜单项");
+                        _logger?.LogInformation($"右键菜单已创建，包含 {_contextMenuItems.Count} 个菜单项");
+                        ShowContextMenu();
                     }
                     else
                     {
@@ -120,8 +123,6 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
-
                 // 根据列名选择创建相应的菜单
                 switch (columnName)
                 {
@@ -157,11 +158,134 @@ namespace WindowsFormsApp3
         // 初始化右键菜单
         private void InitializeContextMenu()
         {
-            _contextMenu = new ContextMenuStrip();
+            _contextMenuItems = new List<ContextMenuItemSpec>();
             CreateDefaultContextMenu();
-            // 将右键菜单绑定到DataGridView
-            _dgv.ContextMenuStrip = _contextMenu;
             _logger?.LogInformation("右键菜单初始化完成");
+        }
+
+        private void Dgv_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (ContextMenuRequest.IsKeyboardInvocation(e.KeyCode, e.Modifiers))
+            {
+                ShowKeyboardContextMenu();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (!e.Control)
+            {
+                return;
+            }
+
+            string commandId;
+            switch (e.KeyCode)
+            {
+                case Keys.C:
+                    commandId = "copy";
+                    break;
+                case Keys.X:
+                    commandId = "cut";
+                    break;
+                case Keys.V:
+                    commandId = "paste";
+                    break;
+                default:
+                    return;
+            }
+
+            // 原生菜单只为默认菜单中的复制、剪切、粘贴声明快捷键；其余列保持原有按键行为。
+            if (!_contextMenuItems.Any(item => item.Id == commandId && !string.IsNullOrEmpty(item.ShortcutText)))
+            {
+                return;
+            }
+
+            ExecuteContextMenuCommand(new ContextMenuItemSpec(commandId, string.Empty));
+
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
+        private void ShowContextMenu()
+        {
+            ShowContextMenu(_dgv.PointToClient(Control.MousePosition), true);
+        }
+
+        private void ShowKeyboardContextMenu()
+        {
+            var currentCell = _dgv.CurrentCell ?? _dgv.SelectedCells.Cast<DataGridViewCell>().FirstOrDefault();
+            if (currentCell != null && currentCell.RowIndex >= 0 && currentCell.ColumnIndex >= 0)
+            {
+                _currentColumnName = _dgv.Columns[currentCell.ColumnIndex].Name;
+                CreateContextMenuForColumn(_currentColumnName);
+            }
+
+            if (_contextMenuItems != null && _contextMenuItems.Count > 0)
+            {
+                ShowContextMenu(ContextMenuRequest.GetKeyboardInvocationLocation(_dgv), false);
+            }
+        }
+
+        private void ShowContextMenu(System.Drawing.Point location, bool useMousePosition)
+        {
+            var request = new ContextMenuRequest(_dgv, _contextMenuItems)
+            {
+                Location = location,
+                UseMousePosition = useMousePosition
+            };
+
+            AntdUiContextMenuRenderer.Show(request, ExecuteContextMenuCommand);
+        }
+
+        private void ExecuteContextMenuCommand(ContextMenuItemSpec item)
+        {
+            try
+            {
+                switch (item.Id)
+                {
+                    case "material":
+                        SetSelectedMaterial(item.Tag as string);
+                        break;
+                    case "manual-input":
+                        ShowQuantityInputDialog();
+                        break;
+                    case "set-bleed":
+                        _logger?.LogInformation("用户点击了设置出血值菜单项");
+                        _logger?.LogInformation($"当前DataGridView状态 - 选中行数: {_dgv.SelectedRows.Count}, 选中单元格数: {_dgv.SelectedCells.Count}");
+                        foreach (DataGridViewRow row in _dgv.SelectedRows)
+                        {
+                            _logger?.LogInformation($"选中行 {row.Index}: {row.Cells["colOriginalName"]?.Value}");
+                        }
+                        ShowBleedInputDialog();
+                        break;
+                    case "set-order-number-sequence":
+                        ShowOrderNumberSequenceDialog();
+                        break;
+                    case "extract-number-to-quantity":
+                        ShowExtractNumberDialog();
+                        break;
+                    case "copy":
+                        CopyItem_Click(this, EventArgs.Empty);
+                        break;
+                    case "cut":
+                        CutItem_Click(this, EventArgs.Empty);
+                        break;
+                    case "paste":
+                        PasteItem_Click(this, EventArgs.Empty);
+                        break;
+                    case "delete":
+                        DeleteItem_Click(this, EventArgs.Empty);
+                        break;
+                    case "refresh":
+                        RefreshItem_Click(this, EventArgs.Empty);
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"执行右键菜单命令 {item.Id} 时发生错误");
+                MessageBox.Show($"执行右键菜单命令时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         // 创建默认右键菜单
@@ -169,33 +293,15 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
-
-                // 添加菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                copyItem.ShortcutKeys = Keys.Control | Keys.C;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem cutItem = new ToolStripMenuItem("剪切");
-                cutItem.Click += CutItem_Click;
-                cutItem.ShortcutKeys = Keys.Control | Keys.X;
-                _contextMenu.Items.Add(cutItem);
-
-                ToolStripMenuItem pasteItem = new ToolStripMenuItem("粘贴");
-                pasteItem.Click += PasteItem_Click;
-                pasteItem.ShortcutKeys = Keys.Control | Keys.V;
-                _contextMenu.Items.Add(pasteItem);
-
-                ToolStripMenuItem deleteItem = new ToolStripMenuItem("删除");
-                deleteItem.Click += DeleteItem_Click;
-                _contextMenu.Items.Add(deleteItem);
-
-                _contextMenu.Items.Add(new ToolStripSeparator());
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
+                _contextMenuItems = new List<ContextMenuItemSpec>
+                {
+                    new ContextMenuItemSpec("copy", "复制") { ShortcutText = "Ctrl+C" },
+                    new ContextMenuItemSpec("cut", "剪切") { ShortcutText = "Ctrl+X" },
+                    new ContextMenuItemSpec("paste", "粘贴") { ShortcutText = "Ctrl+V" },
+                    new ContextMenuItemSpec("delete", "删除") { IsDangerous = true },
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("refresh", "刷新")
+                };
                 
                 _logger?.LogInformation("默认右键菜单创建完成");
             }
@@ -211,65 +317,21 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
+                _contextMenuItems = new List<ContextMenuItemSpec>();
 
                 // 添加材料类别菜单项
                 if (_materials != null && _materials.Count > 0)
                 {
                     foreach (string material in _materials)
                     {
-                        ToolStripMenuItem materialItem = new ToolStripMenuItem(material);
-                        materialItem.Click += (sender, e) =>
-                        {
-                            try
-                            {
-                                int updatedCount = 0;
-                                // 填充所有选中的单元格
-                                foreach (DataGridViewCell cell in _dgv.SelectedCells)
-                                {
-                                    if (cell.ColumnIndex == _dgv.Columns["colMaterial"].Index)
-                                    {
-                                        // 检查DataGridView是否绑定到BindingList
-                                        if (_dgv.DataSource is BindingList<FileRenameInfo> bindingList)
-                                        {
-                                            // 通过BindingList更新数据，这样会自动同步到DataGridView
-                                            if (cell.RowIndex >= 0 && cell.RowIndex < bindingList.Count)
-                                            {
-                                                var item = bindingList[cell.RowIndex];
-                                                item.Material = material;
-                                                updatedCount++;
-                                            }
-                                        }
-                                        else
-                                        {
-                                            // 如果没有绑定到BindingList，直接设置单元格值
-                                            cell.Value = material;
-                                            updatedCount++;
-                                        }
-                                    }
-                                }
-                                _logger?.LogInformation($"设置材料为: {material}，更新了 {updatedCount} 个单元格");
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger?.LogError(ex, $"设置材料 {material} 时发生错误");
-                                MessageBox.Show($"设置材料时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                            }
-                        };
-                        _contextMenu.Items.Add(materialItem);
+                        _contextMenuItems.Add(new ContextMenuItemSpec("material", material) { Tag = material });
                     }
 
-                    _contextMenu.Items.Add(new ToolStripSeparator());
+                    _contextMenuItems.Add(ContextMenuItemSpec.Divider());
                 }
 
-                // 添加默认菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
+                _contextMenuItems.Add(new ContextMenuItemSpec("copy", "复制"));
+                _contextMenuItems.Add(new ContextMenuItemSpec("refresh", "刷新"));
                 
                 _logger?.LogInformation("材料列右键菜单创建完成");
             }
@@ -281,39 +343,51 @@ namespace WindowsFormsApp3
             }
         }
 
+        private void SetSelectedMaterial(string material)
+        {
+            try
+            {
+                int updatedCount = 0;
+                foreach (DataGridViewCell cell in _dgv.SelectedCells)
+                {
+                    if (cell.ColumnIndex == _dgv.Columns["colMaterial"].Index)
+                    {
+                        if (_dgv.DataSource is BindingList<FileRenameInfo> bindingList)
+                        {
+                            if (cell.RowIndex >= 0 && cell.RowIndex < bindingList.Count)
+                            {
+                                bindingList[cell.RowIndex].Material = material;
+                                updatedCount++;
+                            }
+                        }
+                        else
+                        {
+                            cell.Value = material;
+                            updatedCount++;
+                        }
+                    }
+                }
+                _logger?.LogInformation($"设置材料为: {material}，更新了 {updatedCount} 个单元格");
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, $"设置材料 {material} 时发生错误");
+                MessageBox.Show($"设置材料时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         // 创建数量列右键菜单
         private void CreateQuantityContextMenu()
         {
             try
             {
-                _contextMenu.Items.Clear();
-
-                // 添加手动输入菜单项
-                ToolStripMenuItem manualInputItem = new ToolStripMenuItem("手动输入");
-                manualInputItem.Click += (sender, e) =>
+                _contextMenuItems = new List<ContextMenuItemSpec>
                 {
-                    try
-                    {
-                        ShowQuantityInputDialog();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "显示数量输入对话框时发生错误");
-                        MessageBox.Show($"显示输入对话框时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    new ContextMenuItemSpec("manual-input", "手动输入"),
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("copy", "复制"),
+                    new ContextMenuItemSpec("refresh", "刷新")
                 };
-                _contextMenu.Items.Add(manualInputItem);
-
-                _contextMenu.Items.Add(new ToolStripSeparator());
-
-                // 添加默认菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
                 
                 _logger?.LogInformation("数量列右键菜单创建完成");
             }
@@ -454,43 +528,13 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
-
-                // 添加设置出血值菜单项
-                ToolStripMenuItem setBleedItem = new ToolStripMenuItem("设置出血值");
-                setBleedItem.Click += (sender, e) =>
+                _contextMenuItems = new List<ContextMenuItemSpec>
                 {
-                    try
-                    {
-                        _logger?.LogInformation("用户点击了设置出血值菜单项");
-                        _logger?.LogInformation($"当前DataGridView状态 - 选中行数: {_dgv.SelectedRows.Count}, 选中单元格数: {_dgv.SelectedCells.Count}");
-
-                        // 输出选中行的详细信息
-                        foreach (DataGridViewRow row in _dgv.SelectedRows)
-                        {
-                            _logger?.LogInformation($"选中行 {row.Index}: {row.Cells["colOriginalName"]?.Value}");
-                        }
-
-                        ShowBleedInputDialog();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "显示出血值输入对话框时发生错误");
-                        MessageBox.Show($"显示输入对话框时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    new ContextMenuItemSpec("set-bleed", "设置出血值"),
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("copy", "复制"),
+                    new ContextMenuItemSpec("refresh", "刷新")
                 };
-                _contextMenu.Items.Add(setBleedItem);
-
-                _contextMenu.Items.Add(new ToolStripSeparator());
-
-                // 添加默认菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
                 
                 _logger?.LogInformation("尺寸列右键菜单创建完成");
             }
@@ -877,34 +921,13 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
-
-                // 添加设置订单号序列菜单项
-                ToolStripMenuItem setSequenceItem = new ToolStripMenuItem("设置订单号序列");
-                setSequenceItem.Click += (sender, e) =>
+                _contextMenuItems = new List<ContextMenuItemSpec>
                 {
-                    try
-                    {
-                        ShowOrderNumberSequenceDialog();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "显示订单号序列对话框时发生错误");
-                        MessageBox.Show($"显示对话框时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    new ContextMenuItemSpec("set-order-number-sequence", "设置订单号序列"),
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("copy", "复制"),
+                    new ContextMenuItemSpec("refresh", "刷新")
                 };
-                _contextMenu.Items.Add(setSequenceItem);
-
-                _contextMenu.Items.Add(new ToolStripSeparator());
-
-                // 添加默认菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
                 
                 _logger?.LogInformation("订单号列右键菜单创建完成");
             }
@@ -1017,34 +1040,13 @@ namespace WindowsFormsApp3
         {
             try
             {
-                _contextMenu.Items.Clear();
-
-                // 添加提取数字到数量列菜单项
-                ToolStripMenuItem extractNumberItem = new ToolStripMenuItem("提取数字到数量列");
-                extractNumberItem.Click += (sender, e) =>
+                _contextMenuItems = new List<ContextMenuItemSpec>
                 {
-                    try
-                    {
-                        ShowExtractNumberDialog();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger?.LogError(ex, "显示提取数字对话框时发生错误");
-                        MessageBox.Show($"显示对话框时发生错误: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    new ContextMenuItemSpec("extract-number-to-quantity", "提取数字到数量列"),
+                    ContextMenuItemSpec.Divider(),
+                    new ContextMenuItemSpec("copy", "复制"),
+                    new ContextMenuItemSpec("refresh", "刷新")
                 };
-                _contextMenu.Items.Add(extractNumberItem);
-
-                _contextMenu.Items.Add(new ToolStripSeparator());
-
-                // 添加默认菜单项
-                ToolStripMenuItem copyItem = new ToolStripMenuItem("复制");
-                copyItem.Click += CopyItem_Click;
-                _contextMenu.Items.Add(copyItem);
-
-                ToolStripMenuItem refreshItem = new ToolStripMenuItem("刷新");
-                refreshItem.Click += RefreshItem_Click;
-                _contextMenu.Items.Add(refreshItem);
                 
                 _logger?.LogInformation("原文件名列右键菜单创建完成");
             }
@@ -2054,9 +2056,9 @@ namespace WindowsFormsApp3
         }
 
         /// <summary>
-        /// 获取当前右键菜单实例
+        /// 获取当前右键菜单项展示契约
         /// </summary>
-        public ContextMenuStrip ContextMenu => _contextMenu;
+        public IReadOnlyList<ContextMenuItemSpec> ContextMenu => _contextMenuItems;
 
         /// <summary>
         /// 获取当前材料列表
