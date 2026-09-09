@@ -10,7 +10,7 @@ AppSupportURL=
 AppUpdatesURL=
 AppCopyright=Copyright (C) 2026 大诚软件
 ; 版本更新说明
-AppComments=V2.6.2更新内容：全面迁移右键菜单与对话框至AntdUI现代交互体系，支持主题实时适配与持久化列配置；完善批量排版工作台、文件处理流水线与性能监控；
+AppComments=V2.6.2更新内容：全面迁移右键菜单与对话框至AntdUI现代交互体系，支持主题实时适配与持久化列配置；完善批量排版工作台、文件处理流水线与性能监控；左侧待处理工作台全面适配应用主题；
 
 ; 默认安装目录
 DefaultDirName={autopf}\大诚重命名工具
