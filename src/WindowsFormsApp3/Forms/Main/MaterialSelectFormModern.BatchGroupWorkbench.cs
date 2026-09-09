@@ -765,6 +765,7 @@ namespace WindowsFormsApp3
 
                 int currentTop = 6;
                 int cardWidth = Math.Max(480, pnlCardsContainer.ClientSize.Width - 18);
+                ThemeDefinition theme = _activeTheme;
 
                 foreach (var grp in _processGroups)
                 {
@@ -773,13 +774,21 @@ namespace WindowsFormsApp3
                         Location = new Point(6, currentTop),
                         Width = cardWidth,
                         Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                        BackColor = Color.White,
+                        BackColor = theme?.Surface ?? Color.White,
                         Padding = new Padding(1)
                     };
 
                     var headerCard = new BatchGroupHeaderCard(grp);
+                    if (theme != null)
+                    {
+                        headerCard.ApplyTheme(theme);
+                    }
 
                     var dgvGroup = CreateGroupDataGridView(grp);
+                    if (theme != null)
+                    {
+                        ApplyThemeToBatchDataGridView(dgvGroup, theme);
+                    }
                     dgvGroup.Location = new Point(0, headerCard.Height);
                     dgvGroup.Dock = DockStyle.Top;
                     dgvGroup.Visible = !grp.IsCollapsed;
@@ -802,7 +811,10 @@ namespace WindowsFormsApp3
 
                     cardPanel.Paint += (s, e) =>
                     {
-                        Color bc = grp.IsPreserveGroup ? Color.FromArgb(211, 173, 247) : Color.FromArgb(203, 213, 225);
+                        ThemeDefinition activeTheme = _activeTheme;
+                        Color bc = activeTheme == null
+                            ? (grp.IsPreserveGroup ? Color.FromArgb(211, 173, 247) : Color.FromArgb(203, 213, 225))
+                            : (grp.IsPreserveGroup ? activeTheme.AccentColor4 : (grp.IsLocked ? activeTheme.Border : activeTheme.Primary));
                         ControlPaint.DrawBorder(e.Graphics, cardPanel.ClientRectangle, bc, ButtonBorderStyle.Solid);
                     };
 
@@ -1002,18 +1014,28 @@ namespace WindowsFormsApp3
                     if (e.RowIndex < 0 || e.RowIndex >= grp.Items.Count) return;
                     var item = grp.Items[e.RowIndex];
                     if (item == null) return;
+                    ThemeDefinition theme = _activeTheme;
 
                     if (item.IsPreserveJob)
                     {
-                        e.CellStyle.BackColor = Color.FromArgb(249, 240, 255);
+                        e.CellStyle.BackColor = theme == null
+                            ? Color.FromArgb(249, 240, 255)
+                            : BlendThemeColor(theme.SurfaceLight, theme.AccentColor4, 36);
                         if (dgv.Columns[e.ColumnIndex].DataPropertyName == "FileName")
                         {
-                            e.CellStyle.ForeColor = Color.FromArgb(114, 46, 209);
+                            e.CellStyle.ForeColor = theme == null
+                                ? Color.FromArgb(114, 46, 209)
+                                : GetReadableThemeTextColor(e.CellStyle.BackColor, theme.AccentColor4);
                         }
                     }
                     if (dgv.Columns[e.ColumnIndex].DataPropertyName == "LayoutInfo")
                     {
-                        e.CellStyle.ForeColor = Color.FromArgb(19, 194, 194);
+                        Color background = e.CellStyle.BackColor.IsEmpty
+                            ? (theme?.SurfaceLight ?? Color.White)
+                            : e.CellStyle.BackColor;
+                        e.CellStyle.ForeColor = theme == null
+                            ? Color.FromArgb(19, 194, 194)
+                            : GetReadableThemeTextColor(background, theme.AccentColor2);
                         e.CellStyle.Font = new Font("Microsoft YaHei UI", 8.5F, FontStyle.Bold);
                     }
                 }

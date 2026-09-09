@@ -256,6 +256,7 @@ namespace WindowsFormsApp3
         private System.Windows.Forms.Label lblBatchHelp;
         private BindingList<BatchFileItem> _batchItems = new BindingList<BatchFileItem>();
         private bool _isBatchPanelExpanded = false;
+        private ThemeDefinition _activeTheme;
         private const int BATCH_PANEL_WIDTH = 520;
 
         public bool IsApplyToAll { get; private set; } = false;
@@ -10497,6 +10498,7 @@ namespace WindowsFormsApp3
             try
             {
                 LogHelper.Debug($"[MaterialSelectFormModern] 开始应用主题: {theme.Name}");
+                _activeTheme = theme;
 
                 // 判断是否为深色主题
                 bool isDark = IsThemeDark(theme);
@@ -10532,7 +10534,10 @@ namespace WindowsFormsApp3
                 // 10. 应用 TreeView
                 ApplyThemeToTreeView(theme, isDark);
 
-                // 11. 应用 PDF 预览面板
+                // 11. 应用左侧待处理工作台
+                ApplyThemeToBatchFileList(theme, isDark);
+
+                // 12. 应用 PDF 预览面板
                 ApplyThemeToPdfPreview(theme, isDark);
 
                 // 🔧 强制重绘预设按钮面板
@@ -10543,7 +10548,7 @@ namespace WindowsFormsApp3
                     presetButtonsPanel.Refresh();
                 }
 
-                // 12. 应用滚动条主题
+                // 13. 应用滚动条主题
                 ThemeHelper.ApplyScrollBarThemeRecursive(this, isDark);
 
                 LogHelper.Debug($"[MaterialSelectFormModern] 主题应用完成: {theme.Name}");
